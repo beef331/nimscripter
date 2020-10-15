@@ -1,6 +1,7 @@
 import compiler / [nimeval, renderer, ast, types, llstream, vmdef, vm]
 import osproc, strutils, algorithm
 import nimscripterhelper
+import awbject
 # This uses your Nim install to find the standard library instead of hard-coding it
 var
   nimdump = execProcess("nim dump")

@@ -1,5 +1,6 @@
 import macros
 import compiler / [ renderer, vmdef]
+import sets
 export VmArgs
 type
   VmProcSignature* = object
@@ -8,7 +9,10 @@ type
     vmProc*: proc(args: VmArgs){.closure, gcsafe.}
 
 var scriptedTable*{.compileTime.}: seq[VmProcSignature]
-const scriptTable* = scriptedTable
+const 
+  scriptTable* = scriptedTable
+  intNames = ["int", "int8", "int16", "int32", "int64", "uint", "uint8", "byte", "uint16", "uint32", "uint64"].toHashSet
+  floatNames = ["float32", "float", "float64"].toHashSet
 
 macro scripted*(input: untyped): untyped=
   var paramTypes: seq[string]
@@ -34,14 +38,13 @@ macro scripted*(input: untyped): untyped=
   var procArgs: seq[NimNode]
   for i, param in paramTypes:
     var getIdent: NimNode 
-    case param:
-    of "float32", "float", "float64":
+    if param in floatNames:
       getIdent = ident("getFloat")
-    of "int", "int8", "int16", "int32", "int64", "uint8", "byte", "uint16", "uint32", "uint64":
+    elif param in intNames:
       getIdent = ident("getInt")
-    of "bool":
+    elif param == "bool":
       getIdent = ident("getBool")
-    of "string":
+    elif param == "string":
       getIdent = ident("getString")
 
     var paramType = ident(param)
