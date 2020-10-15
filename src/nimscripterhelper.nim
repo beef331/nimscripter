@@ -8,9 +8,6 @@ type
     vmProc*: proc(args: VmArgs){.closure, gcsafe.}
 
 var scriptedTable*{.compileTime.}: seq[VmProcSignature]
-const scriptTable* = block:
-  var deadSeq = scriptedTable
-  deadSeq
 
 macro scripted*(input: untyped): untyped=
   var paramTypes: seq[string]
@@ -51,4 +48,3 @@ macro scripted*(input: untyped): untyped=
     procArgs.add newDotExpr(newCall(newDotExpr(args, getIdent),newIntLitNode(i)), paramType)
   let objConst = result[1][0][0][1]
   objConst[3][1][6] = newCall(name, procArgs) #Rewriting the body of the proc
-  echo result.repr

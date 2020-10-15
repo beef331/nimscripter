@@ -7,6 +7,15 @@ var
   nimlibs = nimdump[nimdump.find("-- end of list --")+18..^2].split
 nimlibs.sort
 
+proc fire(damage: int, x, y: float32){.scripted.}=
+  echo damage, " ", x, " ", y
+
+proc cry(doCry: bool, message: string){.scripted.}=
+  if doCry: echo message
+  else: echo "You are not sad"
+
+const scriptTable = static(scriptedTable)
+
 let
   intr = createInterpreter("script.nims", nimlibs)
   script = readFile("script.nims")
@@ -18,12 +27,8 @@ intr.implementRoutine("*", "script", "compilerProc", proc (a: VmArgs) =
   a.setResult(a.getInt(0) + a.getInt(1))
 )
 var scriptAddition = ""
-echo scriptTable
 for scriptProc in scriptTable:
   scriptAddition &= scriptProc.vmCompDefine
   intr.implementRoutine("*", "script", scriptProc.name, scriptProc.vmProc)
 intr.evalScript(llStreamOpen(scriptAddition & script))
-
 intr.destroyInterpreter()
-proc fire(damage: int, x, y: float32){.scripted.}=
-  echo damage, " ", x, " ", y
