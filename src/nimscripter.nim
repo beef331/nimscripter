@@ -8,7 +8,6 @@ var
   nimdump = execProcess("nim dump")
   nimlibs = nimdump[nimdump.find("-- end of list --")+18..^2].split
 nimlibs.sort
-
 proc fire(damage: int, x, y: float32){.scripted.}=
   echo damage, " ", x, " ", y
 
@@ -23,9 +22,11 @@ let
   intr = createInterpreter("script.nims", nimlibs)
   script = readFile("script.nims")
 
-var scriptAddition = ""
+var scriptAddition = "import src/awbject\nimport json\n"
 for scriptProc in scriptTable:
   scriptAddition &= scriptProc.vmCompDefine
-  intr.implementRoutine("*", "script", scriptProc.name, scriptProc.vmProc)
+  scriptAddition &= scriptProc.vmRunDefine
+  echo scriptProc
+  intr.implementRoutine("*", "script", scriptProc.name & "Comp", scriptProc.vmProc)
 intr.evalScript(llStreamOpen(scriptAddition & script))
 intr.destroyInterpreter()

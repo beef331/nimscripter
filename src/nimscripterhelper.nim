@@ -7,6 +7,7 @@ export VmArgs
 type
   VmProcSignature* = object
     vmCompDefine*: string
+    vmRunDefine*: string
     name*: string
     vmProc*: proc(args: VmArgs){.closure, gcsafe.}
 
@@ -17,23 +18,31 @@ const
   floatNames = ["float32", "float", "float64"].toHashSet
 {.experimental: "dynamicBindSym".} 
 macro scripted*(input: untyped): untyped=
-  var paramTypes: seq[NimNode]
+  var 
+    paramTypes: seq[NimNode]
+    runTimeArgs: seq[NimNode]
   for x in input[3]:
     if x.kind == nnkIdentDefs:
       for declared in 0..<(x.len-2):
         paramTypes.add x[^2]
+        if not ($x[^2] in intNames + floatNames + ["bool", "string"].toHashSet):
+          runTimeArgs.add newNimNode(nnkPrefix).add(ident("$"),newNimNode(nnkPrefix).add(ident("%"), x[declared]))
+        else: runTimeArgs.add x[declared]
+
 
   let duplicated = copyNimTree(input)
-  duplicated[duplicated.len - 1] = newNimNode(nnkDiscardStmt).add(newEmptyNode())
+  duplicated[^1] = newNimNode(nnkDiscardStmt).add(newEmptyNode())
 
   var 
-    vmDefine = $duplicated.repr
     name = $input[0]
+    vmCompDefine = ($duplicated.repr).replace(name, name & "Comp")
     args = ident("args")
-
-  var 
+    vmRuntimeProc = copyNimTree(input)
     procArgs: seq[NimNode]
     objectConversion: seq[NimNode]
+  vmRuntimeProc[^1] = newCall(ident(name & "Comp"), runTimeArgs)
+  let vmRuntimeDefine = $vmRuntimeProc.repr
+
   for i, param in paramTypes:
     var 
       getIdent: NimNode
@@ -53,7 +62,8 @@ macro scripted*(input: untyped): untyped=
       objectConversion.add quote do:
         let `field` = `args`.getString(`intlit`).parseJson.to(`param`)
       procArgs.add field
-      vmDefine = vmDefine.replace($param, "string")
+      vmCompDefine = vmCompDefine.replace($param, "string")
+    
 
     var paramType = ident(paramName)
     
@@ -63,10 +73,9 @@ macro scripted*(input: untyped): untyped=
   
   result = newStmtList(input,
   quote do:
-    static: scriptedTable.add(VmProcSignature(vmCompDefine: `vmDefine`, name: `name`, vmProc: 
+    static: scriptedTable.add(VmProcSignature(vmCompDefine: `vmCompDefine`, vmRunDefine: `vmRuntimeDefine`, name: `name`, vmProc: 
     proc(`args`: VmArgs)= discard))
   )
 
   let objConst = result[1][0][0][1]
-  objConst[3][1][6] = newStmtList(objectConversion).add(newCall(name, procArgs)) #Rewriting the body of the proc
-  echo result.repr
+  objConst[4][1][6] = newStmtList(objectConversion).add(newCall(name, procArgs)) #Rewriting the body of the proc
