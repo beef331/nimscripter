@@ -8,6 +8,7 @@ type
     vmProc*: proc(args: VmArgs){.closure, gcsafe.}
 
 var scriptedTable*{.compileTime.}: seq[VmProcSignature]
+const scriptTable* = scriptedTable
 
 macro scripted*(input: untyped): untyped=
   var paramTypes: seq[string]
