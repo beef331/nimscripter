@@ -10,12 +10,8 @@ var
 nimlibs.sort
 
 proc toPNode*[T: object](a: T): PNode = newStrNode(nkStrLit, $ (%a))
-#Test code below
-var running = true
 
-proc killProgram(){.scripted.}=
-  running = false
-const scriptAdditions = static:
+let scriptAdditions = block:
   #Due to our reliance on json for object transfer need json
   var scriptAddition = """
 import json
@@ -66,7 +62,6 @@ macro interoped(procDef: untyped): untyped =
 proc fromString[T: object](a: string): T = parseJson(a).to(T)
 proc toString(a: object): string = $(% a)
 """
-  echo scriptTable
   for scriptProc in scriptTable:
     scriptAddition &= scriptProc.vmCompDefine
     scriptAddition &= scriptProc.vmRunDefine
@@ -86,7 +81,6 @@ proc loadScript(path: string, modules: varargs[string]): Interpreter=
   for scriptProc in scriptTable:
     intr.implementRoutine("*", scriptname, scriptProc.name & "Comp", scriptProc.vmProc)
   intr.evalScript(llStreamOpen(additions & script))
-  writeFile("scripts2.nims", additions & script)
   intr
 
 proc invoke(intr: Interpreter, procName: string, args: openArray[PNode] = [], T: typeDesc): T=
@@ -103,12 +97,18 @@ proc invoke(intr: Interpreter, procName: string, args: openArray[PNode] = [], T:
     to((ret.strVal).parseJson, T)
 
 
+#Test code below
+var running = true
 
+proc killProgram(){.scripted.}=
+  running = false
 
 import times
 var 
   lastMod = getLastModificationTime("script.nims")
   intrptr = loadScript("script.nims", "src/awbject")
+
+  
 while running:
   if lastMod < getLastModificationTime("script.nims"):
     lastMod = getLastModificationTime("script.nims")
