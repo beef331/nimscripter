@@ -1,7 +1,6 @@
 import macros
 import compiler / [ renderer, vmdef]
 import sets
-import awbject
 import strutils
 export VmArgs
 type
@@ -16,35 +15,43 @@ const
   scriptTable* = scriptedTable
   intNames = ["int", "int8", "int16", "int32", "int64", "uint", "uint8", "byte", "uint16", "uint32", "uint64"].toHashSet
   floatNames = ["float32", "float", "float64"].toHashSet
+
+proc isPrimitive(str: string): bool = str in intNames + floatNames + ["bool", "string"].toHashSet
+
 {.experimental: "dynamicBindSym".} 
+
 macro scripted*(input: untyped): untyped=
   var 
     paramTypes: seq[NimNode]
     runTimeArgs: seq[NimNode]
   for x in input[3]:
     if x.kind == nnkIdentDefs:
+      #For each declared variable here
       for declared in 0..<(x.len-2):
         paramTypes.add x[^2]
-        if not ($x[^2] in intNames + floatNames + ["bool", "string"].toHashSet):
+        #If it's not a primitive convert to json, else just send it
+        if not ($x[^2]).isPrimitive:
           runTimeArgs.add newNimNode(nnkPrefix).add(ident("$"),newNimNode(nnkPrefix).add(ident("%"), x[declared]))
         else: runTimeArgs.add x[declared]
 
   let hasRtnVal = input[3][0].kind != nnkEmpty
 
   let duplicated = copyNimTree(input)
-  duplicated[^1] = newNimNode(nnkDiscardStmt).add(newEmptyNode())
+  duplicated[^1] = newNimNode(nnkDiscardStmt).add(newEmptyNode()) #Replace body with discard for a placeholder
 
   var 
     name = $input[0]
-    vmCompDefine = ($duplicated.repr).replace(name, name & "Comp")
+    vmCompDefine = ($duplicated.repr).replace(name, name & "Comp") #Make it procNameComp(args)
     args = ident("args")
     vmRuntimeProc = copyNimTree(input)
     procArgs: seq[NimNode]
     objectConversion: seq[NimNode]
+  #Call the injected proc from nimscript
   vmRuntimeProc[^1] = newCall(ident(name & "Comp"), runTimeArgs)
-  if hasRtnVal and not ($input[3][0] in intNames + floatNames + ["bool", "string"].toHashSet):
+  #If it has a return value and it's not primitve convert from json
+  if hasRtnVal and not ($input[3][0]).isPrimitive:
     vmRuntimeProc[^1] = newCall(ident("to"),newCall(ident("parseJson"),vmRuntimeProc[^1]), input[3][0])
-  let vmRuntimeDefine = $vmRuntimeProc.repr
+  let vmRuntimeDefine = $vmRuntimeProc.repr #We're just using the nim AST to generate the nimscript proc
 
   for i, param in paramTypes:
     var 
@@ -65,7 +72,7 @@ macro scripted*(input: untyped): untyped=
       objectConversion.add quote do:
         let `field` = `args`.getString(`intlit`).parseJson.to(`param`)
       procArgs.add field
-      vmCompDefine = vmCompDefine.replace($param, "string")
+      vmCompDefine = vmCompDefine.replace($param, "string") #replaces the param with string as we cannot send objects across the nim -> nimscript barrier
     
 
     var paramType = ident(paramName)
@@ -81,9 +88,9 @@ macro scripted*(input: untyped): untyped=
   )
   let objConst = result[1][0][0][1]
   if not hasRtnVal:
-    objConst[4][1][6] = newStmtList(objectConversion).add(newCall(name, procArgs)) #Rewriting the body of the proc
+    objConst[4][1][6] = newStmtList(objectConversion).add(newCall(name, procArgs)) #Rewriting the body of the anon proc
   else:
     var procResultNode = newCall(name, procArgs)
-    if not ($input[3][0] in intNames + floatNames + ["bool", "string"].toHashSet):
-      procResultNode = newNimNode(nnkPrefix).add(ident("$"),newNimNode(nnkPrefix).add(ident("%"), procResultNode))
-    objConst[4][1][6] = newStmtList(objectConversion).add(newCall(newDotExpr(args, ident("setResult")),procResultNode))
+    if not ($input[3][0]).isPrimitive:
+      procResultNode = newNimNode(nnkPrefix).add(ident("$"),newNimNode(nnkPrefix).add(ident("%"), procResultNode)) #if we have a return and it's an object convert from json
+    objConst[4][1][6] = newStmtList(objectConversion).add(newCall(newDotExpr(args, ident("setResult")),procResultNode)) #Rewrite body of the anon proc
