@@ -24,8 +24,7 @@ proc hmm(a: Awbject): Awbject {.scripted.}= Awbject(a: a.a - 10)
 
 const scriptAdditions = static:
   #Due to our reliance on json for object transfer need json
-  var scriptAddition = 
-"""
+  var scriptAddition = """
 import json
 import src/awbject
 import macros, sets
