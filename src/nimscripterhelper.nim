@@ -1,8 +1,8 @@
 import macros
-import compiler / [ renderer, vmdef]
+import compiler / [nimeval, renderer, ast, types, llstream, vmdef, vm]
 import sets
 import strutils
-export VmArgs
+export VmArgs, nimeval, renderer, ast, types, llstream, vmdef, vm
 type
   VmProcSignature* = object
     vmCompDefine*: string

@@ -1,21 +1,28 @@
 import compiler / [nimeval, renderer, ast, types, llstream, vmdef, vm]
 import os, osproc, strutils, algorithm
 import nimscripterhelper
-import awbject
 import json
+export destroyInterpreter
+
 # This uses your Nim install to find the standard library instead of hard-coding it
 var
   nimdump = execProcess("nim dump")
   nimlibs = nimdump[nimdump.find("-- end of list --")+18..^2].split
 nimlibs.sort
 
-proc toPNode*[T: object](a: T): PNode = newStrNode(nkStrLit, $ (%a))
+proc toPNode*[T](a: T): PNode = 
+  when T is SomeOrdinal:
+    newIntNode(nkIntLit, a)
+  elif T is SomeFloat:
+    newFloatNode(nkFloatLit, a)
+  elif T is string:
+    newStrNode(nkStrLit, a)
+  else: newStrNode(nkStrLit, $ (%a))
 
-let scriptAdditions = block:
+const scriptAdditions = block:
   #Due to our reliance on json for object transfer need json
   var scriptAddition = """
 import json
-import src/awbject
 import macros, sets
 const 
   intNames = ["int", "int8", "int16", "int32", "int64", "uint", "uint8", "byte", "uint16", "uint32", "uint64"].toHashSet
@@ -28,10 +35,12 @@ macro interoped(procDef: untyped): untyped =
     newProcArgs: seq[NimNode]
     oldProcTypes: seq[NimNode]
     hasReturn = false
+    hasNonPrimitiveArgs = false
   if procDef[3][0].kind != nnkEmpty and not ($procDef[3][0]).isPrimitive:
     hasReturn = true
     newProcArgs.add ident("string")
-
+  else:
+    newProcArgs.add procDef[3][0]
 
   for param in procDef[3]:
     if param.kind == nnkIdentDefs:
@@ -42,6 +51,7 @@ macro interoped(procDef: untyped): untyped =
         oldProcTypes.add(param[^2])
         if not ($param[^2]).isPrimitive:
           newProcArgs[^1][^2] = ident("string")
+          hasNonPrimitiveArgs = true
   if newProcArgs.len == 0:
     if procDef[0].kind == nnkident:
       procDef[0] = postfix(procDef[0],"*") 
@@ -55,19 +65,25 @@ macro interoped(procDef: untyped): untyped =
         args.add(arg[declared])
         newBody.add newLetStmt(arg[declared], newCall(newNimNode(nnkBracketExpr).add(ident("fromString"),oldProcTypes[declared]), arg[declared]))
   newBody.add newNimNode(nnkCall).add(args)
-  if hasReturn: newBody[0] = newDotExpr(newBody[0], ident("toString"))
-  let exposedProc = newProc(postfix(procDef[0], "*"), newProcArgs, newBody)
-  result = newStmtList(procDef, exposedProc)
+  if hasReturn: 
+    newBody[0] = newDotExpr(newBody[0], ident("toString"))
+    let exposedProc = newProc(postfix(procDef[0], "*"), newProcArgs, newBody)
+    result = newStmtList(procDef, exposedProc)
+  elif not hasNonPrimitiveArgs: 
+    newBody = procDef[6]
+    let exposedProc = newProc(postfix(procDef[0], "*"), newProcArgs, newBody)
+    result = newStmtList(exposedProc)
+  echo result.repr
 
 proc fromString[T: object](a: string): T = parseJson(a).to(T)
 proc toString(a: object): string = $(% a)
 """
-  for scriptProc in scriptTable:
+  for scriptProc in scriptedTable:
     scriptAddition &= scriptProc.vmCompDefine
     scriptAddition &= scriptProc.vmRunDefine
   scriptAddition
 
-proc loadScript(path: string, modules: varargs[string]): Interpreter=
+proc loadScript*(path: string, modules: varargs[string]): Interpreter=
   var additions = scriptAdditions
   
   for `mod` in modules:
@@ -80,10 +96,11 @@ proc loadScript(path: string, modules: varargs[string]): Interpreter=
 
   for scriptProc in scriptTable:
     intr.implementRoutine("*", scriptname, scriptProc.name & "Comp", scriptProc.vmProc)
+  writeFile("main2.nims",additions & script)
   intr.evalScript(llStreamOpen(additions & script))
   intr
 
-proc invoke(intr: Interpreter, procName: string, args: openArray[PNode] = [], T: typeDesc): T=
+proc invoke*(intr: Interpreter, procName: string, args: openArray[PNode] = [], T: typeDesc): T=
   let 
     foreignProc = intr.selectRoutine(procName)
     ret = intr.callRoutine(foreignProc, args)
@@ -95,27 +112,3 @@ proc invoke(intr: Interpreter, procName: string, args: openArray[PNode] = [], T:
     ret.strVal
   elif not T is void:
     to((ret.strVal).parseJson, T)
-
-
-#Test code below
-var running = true
-
-proc killProgram(){.scripted.}=
-  running = false
-
-import times
-var 
-  lastMod = getLastModificationTime("script.nims")
-  intrptr = loadScript("script.nims", "src/awbject")
-
-  
-while running:
-  if lastMod < getLastModificationTime("script.nims"):
-    lastMod = getLastModificationTime("script.nims")
-    intrptr.destroyInterpreter()
-    intrptr = loadScript("script.nims", "src/awbject")
-
-  intrptr.invoke("update", [], void)
-  sleep(300)
-
-intrptr.destroyInterpreter()
