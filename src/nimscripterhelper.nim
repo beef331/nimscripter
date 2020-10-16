@@ -29,6 +29,7 @@ macro scripted*(input: untyped): untyped=
           runTimeArgs.add newNimNode(nnkPrefix).add(ident("$"),newNimNode(nnkPrefix).add(ident("%"), x[declared]))
         else: runTimeArgs.add x[declared]
 
+  let hasRtnVal = input[3][0].kind != nnkEmpty
 
   let duplicated = copyNimTree(input)
   duplicated[^1] = newNimNode(nnkDiscardStmt).add(newEmptyNode())
@@ -41,6 +42,8 @@ macro scripted*(input: untyped): untyped=
     procArgs: seq[NimNode]
     objectConversion: seq[NimNode]
   vmRuntimeProc[^1] = newCall(ident(name & "Comp"), runTimeArgs)
+  if hasRtnVal and not ($input[3][0] in intNames + floatNames + ["bool", "string"].toHashSet):
+    vmRuntimeProc[^1] = newCall(ident("to"),newCall(ident("parseJson"),vmRuntimeProc[^1]), input[3][0])
   let vmRuntimeDefine = $vmRuntimeProc.repr
 
   for i, param in paramTypes:
@@ -74,8 +77,13 @@ macro scripted*(input: untyped): untyped=
   result = newStmtList(input,
   quote do:
     static: scriptedTable.add(VmProcSignature(vmCompDefine: `vmCompDefine`, vmRunDefine: `vmRuntimeDefine`, name: `name`, vmProc: 
-    proc(`args`: VmArgs)= discard))
+    proc(`args`: VmArgs){.closure, gcsafe.}= discard))
   )
-
   let objConst = result[1][0][0][1]
-  objConst[4][1][6] = newStmtList(objectConversion).add(newCall(name, procArgs)) #Rewriting the body of the proc
+  if not hasRtnVal:
+    objConst[4][1][6] = newStmtList(objectConversion).add(newCall(name, procArgs)) #Rewriting the body of the proc
+  else:
+    var procResultNode = newCall(name, procArgs)
+    if not ($input[3][0] in intNames + floatNames + ["bool", "string"].toHashSet):
+      procResultNode = newNimNode(nnkPrefix).add(ident("$"),newNimNode(nnkPrefix).add(ident("%"), procResultNode))
+    objConst[4][1][6] = newStmtList(objectConversion).add(newCall(newDotExpr(args, ident("setResult")),procResultNode))

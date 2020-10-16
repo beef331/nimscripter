@@ -16,7 +16,9 @@ proc cry(doCry: bool, message: string){.scripted.}=
   else: echo "You are not sad"
 
 proc kill(a: Awbject){.scripted.}=
-  echo a.a
+  echo a.a 
+
+proc hmm(a: Awbject): Awbject {.scripted.}= Awbject(a: a.a - 10)
 
 let
   intr = createInterpreter("script.nims", nimlibs)
