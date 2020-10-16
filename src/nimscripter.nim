@@ -9,19 +9,12 @@ var
   nimlibs = nimdump[nimdump.find("-- end of list --")+18..^2].split
 nimlibs.sort
 
+proc toPNode*[T: object](a: T): PNode = newStrNode(nkStrLit, $ (%a))
+#Test code below
+var running = true
 
-proc fire(damage: int, x, y: float32){.scripted.}=
-  echo damage, " ", x, " ", y
-
-proc cry(doCry: bool, message: string){.scripted.}=
-  if doCry: echo message
-  else: echo "You are not sad"
-
-proc kill(a: Awbject){.scripted.}=
-  echo a.a 
-
-proc hmm(a: Awbject): Awbject {.scripted.}= Awbject(a: a.a - 10)
-
+proc killProgram(){.scripted.}=
+  running = false
 const scriptAdditions = static:
   #Due to our reliance on json for object transfer need json
   var scriptAddition = """
@@ -38,7 +31,9 @@ macro interoped(procDef: untyped): untyped =
   var 
     newProcArgs: seq[NimNode]
     oldProcTypes: seq[NimNode]
-  if not ($procDef[3][0]).isPrimitive:
+    hasReturn = false
+  if procDef[3][0].kind != nnkEmpty and not ($procDef[3][0]).isPrimitive:
+    hasReturn = true
     newProcArgs.add ident("string")
 
 
@@ -51,7 +46,10 @@ macro interoped(procDef: untyped): untyped =
         oldProcTypes.add(param[^2])
         if not ($param[^2]).isPrimitive:
           newProcArgs[^1][^2] = ident("string")
-  
+  if newProcArgs.len == 0:
+    if procDef[0].kind == nnkident:
+      procDef[0] = postfix(procDef[0],"*") 
+    return procDef
   var 
     newBody = newStmtList()
     args: seq[NimNode]
@@ -60,19 +58,19 @@ macro interoped(procDef: untyped): untyped =
       for declared in 0..<(arg.len-2):
         args.add(arg[declared])
         newBody.add newLetStmt(arg[declared], newCall(newNimNode(nnkBracketExpr).add(ident("fromString"),oldProcTypes[declared]), arg[declared]))
-  newBody.add newDotExpr(newNimNode(nnkCall).add(args), ident("toString"))
+  newBody.add newNimNode(nnkCall).add(args)
+  if hasReturn: newBody[0] = newDotExpr(newBody[0], ident("toString"))
   let exposedProc = newProc(postfix(procDef[0], "*"), newProcArgs, newBody)
   result = newStmtList(procDef, exposedProc)
 
 proc fromString[T: object](a: string): T = parseJson(a).to(T)
 proc toString(a: object): string = $(% a)
 """
+  echo scriptTable
   for scriptProc in scriptTable:
     scriptAddition &= scriptProc.vmCompDefine
     scriptAddition &= scriptProc.vmRunDefine
   scriptAddition
-
-proc toPNode*[T: object](a: T): PNode = newStrNode(nkStrLit, $ (%a))
 
 proc loadScript(path: string, modules: varargs[string]): Interpreter=
   var additions = scriptAdditions
@@ -101,10 +99,23 @@ proc invoke(intr: Interpreter, procName: string, args: openArray[PNode] = [], T:
     ret.floatVal.T
   elif T is string:
     ret.strVal
-  else:
+  elif not T is void:
     to((ret.strVal).parseJson, T)
-  
-let intrptr = loadScript("script.nims", "src/awbject")
-var a: Awbject = intrptr.invoke("update", [Awbject(a: 1000).toPNode], Awbject)
-echo a
+
+
+
+
+import times
+var 
+  lastMod = getLastModificationTime("script.nims")
+  intrptr = loadScript("script.nims", "src/awbject")
+while running:
+  if lastMod < getLastModificationTime("script.nims"):
+    lastMod = getLastModificationTime("script.nims")
+    intrptr.destroyInterpreter()
+    intrptr = loadScript("script.nims", "src/awbject")
+
+  intrptr.invoke("update", [], void)
+  sleep(300)
+
 intrptr.destroyInterpreter()
