@@ -2,7 +2,9 @@ import macros
 import compiler / [nimeval, renderer, ast, types, llstream, vmdef, vm]
 import sets
 import strutils
+import vmtable
 export VmArgs, nimeval, renderer, ast, types, llstream, vmdef, vm
+
 type
   VmProcSignature* = object
     vmCompDefine*: string
@@ -28,9 +30,12 @@ macro scripted*(input: untyped): untyped=
     if x.kind == nnkIdentDefs:
       #For each declared variable here
       for declared in 0..<(x.len-2):
-        paramTypes.add x[^2]
         #If it's not a primitive convert to json, else just send it
-        if not ($x[^2]).isPrimitive:
+        let
+          xSym = x[^2].bindSym
+          xType = xSym.getImpl()
+        paramTypes.add x[^2]
+        if (xType.kind != nnkNilLit and not ($xType[^1]).isPrimitive) or not ($x[^2]).isPrimitive:
           runTimeArgs.add newNimNode(nnkPrefix).add(ident("$"),newNimNode(nnkPrefix).add(ident("%"), x[declared]))
         else: runTimeArgs.add x[declared]
 

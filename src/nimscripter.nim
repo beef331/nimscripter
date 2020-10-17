@@ -1,8 +1,9 @@
 import compiler / [nimeval, renderer, ast, types, llstream, vmdef, vm, lineinfos, passes]
 import os, osproc, strutils, algorithm
-import nimscripted
 import json
 import options
+import vmtable
+
 export destroyInterpreter, options, Interpreter
 
 
