@@ -1,8 +1,11 @@
-import compiler / [nimeval, renderer, ast, types, llstream, vmdef, vm]
+import compiler / [nimeval, renderer, ast, types, llstream, vmdef, vm, lineinfos, passes]
 import os, osproc, strutils, algorithm
 import nimscripterhelper
 import json
-export destroyInterpreter
+import options
+export destroyInterpreter, options, Interpreter
+
+
 
 # This uses your Nim install to find the standard library instead of hard-coding it
 var
@@ -73,8 +76,6 @@ macro interoped(procDef: untyped): untyped =
     newBody = procDef[6]
     let exposedProc = newProc(postfix(procDef[0], "*"), newProcArgs, newBody)
     result = newStmtList(exposedProc)
-  echo result.repr
-
 proc fromString[T: object](a: string): T = parseJson(a).to(T)
 proc toString(a: object): string = $(% a)
 """
@@ -83,7 +84,11 @@ proc toString(a: object): string = $(% a)
     scriptAddition &= scriptProc.vmRunDefine
   scriptAddition
 
-proc loadScript*(path: string, modules: varargs[string]): Interpreter=
+type
+  VMQuit* = object of CatchableError
+    info*: TLineInfo
+
+proc loadScript*(path: string, modules: varargs[string]): Option[Interpreter]=
   var additions = scriptAdditions
   
   for `mod` in modules:
@@ -93,12 +98,17 @@ proc loadScript*(path: string, modules: varargs[string]): Interpreter=
     scriptName = path.splitFile.name
     intr = createInterpreter(path, nimlibs)
     script = readFile(path)
-
   for scriptProc in scriptTable:
     intr.implementRoutine("*", scriptname, scriptProc.name & "Comp", scriptProc.vmProc)
   writeFile("main2.nims",additions & script)
-  intr.evalScript(llStreamOpen(additions & script))
-  intr
+  intr.registerErrorHook proc(config, info, msg, severity: auto) {.gcsafe.} =
+    if severity == Error and config.error_counter >= config.error_max:
+        raise (ref VMQuit)(info: info, msg: msg)
+  try:
+    intr.evalScript(llStreamOpen(additions & script))
+    result = option(intr)
+  except:
+    discard
 
 proc invoke*(intr: Interpreter, procName: string, args: openArray[PNode] = [], T: typeDesc): T=
   let 
