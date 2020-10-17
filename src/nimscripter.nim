@@ -1,6 +1,6 @@
 import compiler / [nimeval, renderer, ast, types, llstream, vmdef, vm, lineinfos, passes]
 import os, osproc, strutils, algorithm
-import scripted
+import nimscripted
 import json
 import options
 export destroyInterpreter, options, Interpreter
