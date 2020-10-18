@@ -107,4 +107,3 @@ macro scripted*(input: untyped): untyped=
       if not isAlias and not ($input[3][0]).isPrimitive:
         procResultNode = newNimNode(nnkPrefix).add(ident("$"),newNimNode(nnkPrefix).add(ident("%"), procResultNode)) #if we have a return and it's an object convert from json
       objConst[4][1][6] = newStmtList(objectConversion).add(newCall(newDotExpr(args, ident("setResult")),procResultNode)) #Rewrite body of the anon proc
-  echo result.repr
