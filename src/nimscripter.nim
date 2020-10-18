@@ -104,6 +104,7 @@ proc loadScript*(path: string, modules: varargs[string]): Option[Interpreter]=
   writeFile("main2.nims",additions & script)
   intr.registerErrorHook proc(config, info, msg, severity: auto) {.gcsafe.} =
     if severity == Error and config.error_counter >= config.error_max:
+        echo "Script Error ", msg, " ", info
         raise (ref VMQuit)(info: info, msg: msg)
   try:
     intr.evalScript(llStreamOpen(additions & script))

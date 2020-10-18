@@ -14,5 +14,3 @@ type
 var scriptedTable*{.compileTime.}: seq[VmProcSignature]
 const 
   scriptTable* = scriptedTable
-  intNames = ["int", "int8", "int16", "int32", "int64", "uint", "uint8", "byte", "uint16", "uint32", "uint64"].toHashSet
-  floatNames = ["float32", "float", "float64"].toHashSet

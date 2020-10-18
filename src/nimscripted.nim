@@ -5,16 +5,7 @@ import strutils
 import vmtable
 export VmArgs, nimeval, renderer, ast, types, llstream, vmdef, vm
 
-type
-  VmProcSignature* = object
-    vmCompDefine*: string
-    vmRunDefine*: string
-    name*: string
-    vmProc*: proc(args: VmArgs){.closure, gcsafe.}
-
-var scriptedTable*{.compileTime.}: seq[VmProcSignature]
 const 
-  scriptTable* = scriptedTable
   intNames = ["int", "int8", "int16", "int32", "int64", "uint", "uint8", "byte", "uint16", "uint32", "uint64"].toHashSet
   floatNames = ["float32", "float", "float64"].toHashSet
 
@@ -34,8 +25,9 @@ macro scripted*(input: untyped): untyped=
         let
           xSym = x[^2].bindSym
           xType = xSym.getImpl()
+          isAlias = (xType.kind == nnkTypeDef and xType[^1].kind == nnkSym and ($xType[^1]).isPrimitive)
         paramTypes.add x[^2]
-        if (xType.kind != nnkNilLit and not ($xType[^1]).isPrimitive) or not ($x[^2]).isPrimitive:
+        if not isAlias and (x[^2].kind == nnkIdent and not ($x[^2]).isPrimitive):
           runTimeArgs.add newNimNode(nnkPrefix).add(ident("$"),newNimNode(nnkPrefix).add(ident("%"), x[declared]))
         else: runTimeArgs.add x[declared]
 
@@ -45,7 +37,7 @@ macro scripted*(input: untyped): untyped=
   duplicated[^1] = newNimNode(nnkDiscardStmt).add(newEmptyNode()) #Replace body with discard for a placeholder
 
   var 
-    name = $input[0]
+    name = ($input[0]).replace("*")
     vmCompDefine = ($duplicated.repr).replace(name, name & "Comp") #Make it procNameComp(args)
     args = ident("args")
     vmRuntimeProc = copyNimTree(input)
@@ -54,14 +46,24 @@ macro scripted*(input: untyped): untyped=
   #Call the injected proc from nimscript
   vmRuntimeProc[^1] = newCall(ident(name & "Comp"), runTimeArgs)
   #If it has a return value and it's not primitve convert from json
-  if hasRtnVal and not ($input[3][0]).isPrimitive:
-    vmRuntimeProc[^1] = newCall(ident("to"),newCall(ident("parseJson"),vmRuntimeProc[^1]), input[3][0])
+  if input[3][0].kind == nnkIdent:
+    let
+      xSym = input[3][0].bindSym 
+      xType = xSym.getImpl()
+      isAlias = (xType[^1].kind == nnkSym and ($xType[^1]).isPrimitive)
+    if isAlias or (hasRtnVal and not ($input[3][0]).isPrimitive):
+      vmRuntimeProc[^1] = newCall(ident("to"),newCall(ident("parseJson"),vmRuntimeProc[^1]), input[3][0])
   let vmRuntimeDefine = $vmRuntimeProc.repr #We're just using the nim AST to generate the nimscript proc
 
   for i, param in paramTypes:
     var 
       getIdent: NimNode
       paramName = $param
+    let
+      xSym = param.bindSym 
+      xType = xSym.getImpl()
+      isAlias = (xType.kind == nnkTypeDef and xType[^1].kind == nnkSym and ($xType[^1]).isPrimitive)
+    if isAlias: paramName = $xType[^1]
     if paramName in floatNames:
       getIdent = ident("getFloat")
     elif paramName in intNames:
@@ -77,7 +79,7 @@ macro scripted*(input: untyped): untyped=
       objectConversion.add quote do:
         let `field` = `args`.getString(`intlit`).parseJson.to(`param`)
       procArgs.add field
-      vmCompDefine = vmCompDefine.replace($param, "string") #replaces the param with string as we cannot send objects across the nim -> nimscript barrier
+      if not isAlias: vmCompDefine = vmCompDefine.replace($param, "string") #replaces the param with string as we cannot send objects across the nim -> nimscript barrier
     
 
     var paramType = ident(paramName)
@@ -96,6 +98,13 @@ macro scripted*(input: untyped): untyped=
     objConst[4][1][6] = newStmtList(objectConversion).add(newCall(name, procArgs)) #Rewriting the body of the anon proc
   else:
     var procResultNode = newCall(name, procArgs)
-    if not ($input[3][0]).isPrimitive:
-      procResultNode = newNimNode(nnkPrefix).add(ident("$"),newNimNode(nnkPrefix).add(ident("%"), procResultNode)) #if we have a return and it's an object convert from json
-    objConst[4][1][6] = newStmtList(objectConversion).add(newCall(newDotExpr(args, ident("setResult")),procResultNode)) #Rewrite body of the anon proc
+    var isAlias = false
+    if input[3][0].kind == nnkIdent:
+      let
+        xSym = input[3][0].bindSym 
+        xType = xSym.getImpl()
+      isAlias = (xType[^1].kind == nnkSym and ($xType[^1]).isPrimitive)
+      if not isAlias and not ($input[3][0]).isPrimitive:
+        procResultNode = newNimNode(nnkPrefix).add(ident("$"),newNimNode(nnkPrefix).add(ident("%"), procResultNode)) #if we have a return and it's an object convert from json
+      objConst[4][1][6] = newStmtList(objectConversion).add(newCall(newDotExpr(args, ident("setResult")),procResultNode)) #Rewrite body of the anon proc
+  echo result.repr
