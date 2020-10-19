@@ -24,7 +24,7 @@ macro exportToScript*(input: untyped): untyped=
   
   if input[3].len > 1:
     duplicated[3] = newNimNode(nnkFormalParams).add(@[ident("string"), newIdentDefs(ident("data"), ident("string"))])
-  elif input[3].len == 1:
+  elif hasRtnVal:
     duplicated[3] = newNimNode(nnkFormalParams).add(ident("string"))
   var 
     name = ($input[0]).replace("*")
@@ -65,7 +65,6 @@ macro exportToScript*(input: untyped): untyped=
     vmRuntimeProc[^1] = quote do:
       `conversion`
       `runtimeProc`
-  echo vmRuntimeProc.repr
   let 
     vmRuntimeDefine = $vmRuntimeProc.repr #We're just using the nim AST to generate the nimscript proc
     jsonData = ident("jsonData")
