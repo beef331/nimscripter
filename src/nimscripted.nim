@@ -101,4 +101,3 @@ macro exportToScript*(input: untyped): untyped=
       `args`.setResult($ %*{"result": placeHolder()})
     vmBody[^1][1][1][1][0][1] = newCall(input[0].basename, callArgs) #Reassign the function call
   objConst[4][1][6] = vmBody #Set the vmproc body from discard to the proper parsing/calling
-  echo result.repr
