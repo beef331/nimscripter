@@ -33,7 +33,7 @@ const
 
 proc isPrimitive(str: string): bool = str in intNames + floatNames + ["bool", "string"].toHashSet
 
-macro interoped(procDef: untyped): untyped =
+macro exposeToNim(procDef: untyped): untyped =
   var 
     newProcArgs: seq[NimNode]
     oldProcTypes: seq[NimNode]
