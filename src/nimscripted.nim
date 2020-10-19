@@ -21,10 +21,11 @@ macro exportToScript*(input: untyped): untyped=
   let duplicated = copyNimTree(input)
   duplicated[^1] = newNimNode(nnkDiscardStmt).add(newEmptyNode()) #Replace body with discard for a placeholder
   
-  if input[3].len > 1:
-    duplicated[3] = newNimNode(nnkFormalParams).add(@[ident("string"), newIdentDefs(ident("data"), ident("string"))])
-  elif input[3].len == 1:
-    duplicated[3] = newNimNode(nnkFormalParams).add(ident("string"))
+  if hasRtnVal:
+    if input[3].len > 1:
+      duplicated[3] = newNimNode(nnkFormalParams).add(@[ident("string"), newIdentDefs(ident("data"), ident("string"))])
+    elif input[3].len == 1:
+      duplicated[3] = newNimNode(nnkFormalParams).add(ident("string"))
   var 
     name = ($input[0]).replace("*")
     vmCompDefine = ($duplicated.repr).replace(name, name & "Comp") #Make it procNameComp(args)
