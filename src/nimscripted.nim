@@ -23,6 +23,8 @@ macro exportToScript*(input: untyped): untyped=
   
   if input[3].len > 1:
     duplicated[3] = newNimNode(nnkFormalParams).add(@[ident("string"), newIdentDefs(ident("data"), ident("string"))])
+  elif input[3].len == 1:
+    duplicated[3] = newNimNode(nnkFormalParams).add(ident("string"))
   var 
     name = ($input[0]).replace("*")
     vmCompDefine = ($duplicated.repr).replace(name, name & "Comp") #Make it procNameComp(args)
