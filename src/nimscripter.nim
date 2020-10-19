@@ -3,7 +3,6 @@ import os, osproc, strutils, algorithm
 import json
 import options
 import vmtable
-
 export destroyInterpreter, options, Interpreter
 
 
