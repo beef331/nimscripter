@@ -23,7 +23,9 @@ macro exportToScript*(input: untyped): untyped=
   duplicated[^1] = newNimNode(nnkDiscardStmt).add(newEmptyNode()) #Replace body with discard for a placeholder
   
   if input[3].len > 1:
-    duplicated[3] = newNimNode(nnkFormalParams).add(@[ident("string"), newIdentDefs(ident("data"), ident("string"))])
+    duplicated[3] = newNimNode(nnkFormalParams).add(@[newEmptyNode(), newIdentDefs(ident("data"), ident("string"))])
+    if hasRtnVal:
+      duplicated[3][0] = ident("string")
   elif hasRtnVal:
     duplicated[3] = newNimNode(nnkFormalParams).add(ident("string"))
   var 
@@ -99,3 +101,4 @@ macro exportToScript*(input: untyped): untyped=
       `args`.setResult($ %*{"result": placeHolder()})
     vmBody[^1][1][1][1][0][1] = newCall(input[0].basename, callArgs) #Reassign the function call
   objConst[4][1][6] = vmBody #Set the vmproc body from discard to the proper parsing/calling
+  echo result.repr
