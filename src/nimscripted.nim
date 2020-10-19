@@ -22,7 +22,7 @@ macro exportToScript*(input: untyped): untyped=
   duplicated[^1] = newNimNode(nnkDiscardStmt).add(newEmptyNode()) #Replace body with discard for a placeholder
   
   if input[3].len > 1:
-    duplicated[3] = newNimNode(nnkFormalParams).add(@[input[3][0], newIdentDefs(ident("data"), ident("string"))])
+    duplicated[3] = newNimNode(nnkFormalParams).add(@[ident("string"), newIdentDefs(ident("data"), ident("string"))])
   var 
     name = ($input[0]).replace("*")
     vmCompDefine = ($duplicated.repr).replace(name, name & "Comp") #Make it procNameComp(args)
