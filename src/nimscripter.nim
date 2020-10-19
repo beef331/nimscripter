@@ -99,7 +99,7 @@ proc loadScript*(path: string, modules: varargs[string]): Option[Interpreter]=
     intr = createInterpreter(path, nimlibs)
     script = readFile(path)
   for scriptProc in scriptTable:
-    intr.implementRoutine("*", scriptname, scriptProc.name & "Comp", scriptProc.vmProc)
+    intr.implementRoutine("*", scriptname, scriptProc.compName, scriptProc.vmProc)
   when defined(debugScript): writeFile("main2.nims",additions & script)
   intr.registerErrorHook proc(config, info, msg, severity: auto) {.gcsafe.} =
     if severity == Error and config.error_counter >= config.error_max:

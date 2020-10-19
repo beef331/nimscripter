@@ -28,9 +28,20 @@ macro exportToScript*(input: untyped): untyped=
       duplicated[3][0] = ident("string")
   elif hasRtnVal:
     duplicated[3] = newNimNode(nnkFormalParams).add(ident("string"))
-  var 
+  
+  var disrupteksAnger: string
+  for ide in argIdents:
+    disrupteksAnger.add ($ide)[0]
+    disrupteksAnger.add ($ide)[^1]
+  for arg in runTimeArgs:
+    disrupteksAnger.add ($arg[^2])[0]
+    disrupteksAnger.add ($arg[^2])[^1]
+
+  let
     name = ($input[0]).replace("*")
-    vmCompDefine = ($duplicated.repr).replace(name, name & "Comp") #Make it procNameComp(args)
+    compileName = name & "Comp" & disrupteksAnger
+  var
+    vmCompDefine = ($duplicated.repr).replace(name, compileName) #Make it procNameComp(args)
     args = ident("args")
     vmRuntimeProc = copyNimTree(input)
   
@@ -53,9 +64,9 @@ macro exportToScript*(input: untyped): untyped=
       inc i
 
   if runTimeArgs.len > 0:
-    vmRuntimeProc[^1] = newCall(ident(name & "Comp"), prefix(data, "$"))
+    vmRuntimeProc[^1] = newCall(ident(compileName), prefix(data, "$"))
   else:
-    vmRuntimeProc[^1] = newCall(ident(name & "Comp"), newEmptyNode())
+    vmRuntimeProc[^1] = newCall(ident(compileName), newEmptyNode())
   let runtimeProc = vmRuntimeProc[^1]
 
   #If it has a return value and it's not primitve convert from json
@@ -88,16 +99,16 @@ macro exportToScript*(input: untyped): untyped=
       vmBody.add quote do:
         let `paramName` = `jsonData`[`paramStr`].to(`pType`)
       inc i
-
+  let compNameIdent = newStrLitNode(compileName)
   result = newStmtList(input,
   quote do:
-    static: scriptedTable.add(VmProcSignature(vmCompDefine: `vmCompDefine`, vmRunDefine: `vmRuntimeDefine`, name: `name`, vmProc: 
+    static: scriptedTable.add(VmProcSignature(vmCompDefine: `vmCompDefine`, compName: `compNameIdent`,  vmRunDefine: `vmRuntimeDefine`, name: `name`, vmProc: 
     proc(`args`: VmArgs){.closure, gcsafe.}= discard))
   )
   let objConst = result[1][0][0][1]
   vmBody.add newCall(input[0].basename, callArgs)
   if hasRtnVal:
+    let call = newCall(input[0].basename, callArgs)
     vmBody[^1] = quote do:
-      `args`.setResult($ %*{"result": placeHolder()})
-    vmBody[^1][1][1][1][0][1] = newCall(input[0].basename, callArgs) #Reassign the function call
-  objConst[4][1][6] = vmBody #Set the vmproc body from discard to the proper parsing/calling
+      `args`.setResult($ %*{"result": `call`})
+  objConst[5][1][6] = vmBody #Set the vmproc body from discard to the proper parsing/calling

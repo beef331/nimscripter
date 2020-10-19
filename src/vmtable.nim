@@ -9,6 +9,7 @@ type
     vmCompDefine*: string
     vmRunDefine*: string
     name*: string
+    compName*: string
     vmProc*: proc(args: VmArgs){.closure, gcsafe.}
 
 var scriptedTable*{.compileTime.}: seq[VmProcSignature]
