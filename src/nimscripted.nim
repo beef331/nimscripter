@@ -3,7 +3,8 @@ import compiler / [nimeval, renderer, ast, types, llstream, vmdef, vm]
 import sets
 import strutils
 import vmtable
-export VmArgs, nimeval, renderer, ast, types, llstream, vmdef, vm
+import json
+export VmArgs, nimeval, renderer, ast, types, llstream, vmdef, vm, json
 
 macro exportToScript*(input: untyped): untyped=
   when not defined(scripted): return input
@@ -21,11 +22,10 @@ macro exportToScript*(input: untyped): untyped=
   let duplicated = copyNimTree(input)
   duplicated[^1] = newNimNode(nnkDiscardStmt).add(newEmptyNode()) #Replace body with discard for a placeholder
   
-  if hasRtnVal:
-    if input[3].len > 1:
-      duplicated[3] = newNimNode(nnkFormalParams).add(@[ident("string"), newIdentDefs(ident("data"), ident("string"))])
-    elif input[3].len == 1:
-      duplicated[3] = newNimNode(nnkFormalParams).add(ident("string"))
+  if input[3].len > 1:
+    duplicated[3] = newNimNode(nnkFormalParams).add(@[ident("string"), newIdentDefs(ident("data"), ident("string"))])
+  elif input[3].len == 1:
+    duplicated[3] = newNimNode(nnkFormalParams).add(ident("string"))
   var 
     name = ($input[0]).replace("*")
     vmCompDefine = ($duplicated.repr).replace(name, name & "Comp") #Make it procNameComp(args)
@@ -63,8 +63,9 @@ macro exportToScript*(input: untyped): untyped=
       parseJson(`runtimeProc`)["result"].to(`returnType`)
   else:
     vmRuntimeProc[^1] = quote do:
+      `conversion`
       `runtimeProc`
-
+  echo vmRuntimeProc.repr
   let 
     vmRuntimeDefine = $vmRuntimeProc.repr #We're just using the nim AST to generate the nimscript proc
     jsonData = ident("jsonData")
