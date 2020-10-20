@@ -34,8 +34,9 @@ macro exportToScript*(input: untyped): untyped=
     disrupteksAnger.add ($ide)[0]
     disrupteksAnger.add ($ide)[^1]
   for arg in runTimeArgs:
-    disrupteksAnger.add ($arg[^2])[0]
-    disrupteksAnger.add ($arg[^2])[^1]
+    if arg[^2].kind != nnkEmpty:
+      disrupteksAnger.add ($arg[^2])[0]
+      disrupteksAnger.add ($arg[^2])[^1]
 
   let
     name = ($input[0]).replace("*")

@@ -33,17 +33,18 @@ const
 
 proc isPrimitive(str: string): bool = str in intNames + floatNames + ["bool", "string"].toHashSet
 
-macro exposeToNim(procDef: untyped): untyped =
+macro exportToNim(procDef: untyped): untyped =
   var 
     newProcArgs: seq[NimNode]
     oldProcTypes: seq[NimNode]
     hasReturn = false
+    returnIsPrimitive = true
     hasNonPrimitiveArgs = false
-  if procDef[3][0].kind != nnkEmpty and not ($procDef[3][0]).isPrimitive:
+  if procDef[3][0].kind != nnkEmpty:
     hasReturn = true
-    newProcArgs.add ident("string")
-  else:
-    newProcArgs.add procDef[3][0]
+    if (procDef[3][0].kind == nnkIdent and not ($procDef[3][0]).isPrimitive) or procDef[3][0].kind != nnkident:
+      returnIsPrimitive = false
+  newProcArgs.add procDef[3][0]
 
   for param in procDef[3]:
     if param.kind == nnkIdentDefs:
@@ -51,8 +52,7 @@ macro exposeToNim(procDef: untyped): untyped =
       for declared in 0..<(param.len-2):
         #If it's not a primitive convert to json, else just send it
         newProcArgs.add(param)
-        oldProcTypes.add(param[^2])
-        if not ($param[^2]).isPrimitive:
+        if not ($param[^2]).isPrimitive or param[^2].kind != nnkident:
           newProcArgs[^1][^2] = ident("string")
           hasNonPrimitiveArgs = true
   if newProcArgs.len == 0:
@@ -62,22 +62,26 @@ macro exposeToNim(procDef: untyped): untyped =
   var 
     newBody = newStmtList()
     args: seq[NimNode]
-  args.add(procDef[0])
   for i, arg in newProcArgs:
       for declared in 0..<(arg.len-2):
         args.add(arg[declared])
-        newBody.add newLetStmt(arg[declared], newCall(newNimNode(nnkBracketExpr).add(ident("fromString"),oldProcTypes[declared]), arg[declared]))
-  newBody.add newNimNode(nnkCall).add(args)
-  if hasReturn: 
-    newBody[0] = newDotExpr(newBody[0], ident("toString"))
-    let exposedProc = newProc(postfix(procDef[0], "*"), newProcArgs, newBody)
+        if not ($arg[^2]).isPrimitive:
+          newBody.add newLetStmt(arg[declared], newCall(newNimNode(nnkBracketExpr).add(ident("fromString"),newProcArgs[declared]), arg[declared]))
+  newBody.add newCall(procDef[0], args)
+  let exposedName = ident ($procDef[0]) & "Exported"
+  if hasReturn:
+    if not returnIsPrimitive: newBody[0] = newDotExpr(newBody[0], ident("toString"))
+    let exposedProc = newProc(postfix(exposedName, "*"), newProcArgs, newBody)
+    if not returnIsPrimitive:
+      exposedProc[3][0] = ident("string")
     result = newStmtList(procDef, exposedProc)
-  elif not hasNonPrimitiveArgs: 
+  else: 
     newBody = procDef[6]
-    let exposedProc = newProc(postfix(procDef[0], "*"), newProcArgs, newBody)
+    let exposedProc = newProc(postfix(exposedName, "*"), newProcArgs, newBody)
     result = newStmtList(exposedProc)
-proc fromString[T: object](a: string): T = parseJson(a).to(T)
-proc toString(a: object): string = $(% a)
+
+proc fromString[T](a: string): T = parseJson(a).to(T)
+proc toString[T](a: T): string = $(% a)
 """
   for scriptProc in scriptedTable:
     scriptAddition &= scriptProc.vmCompDefine
@@ -89,27 +93,32 @@ type
     info*: TLineInfo
 
 proc loadScript*(path: string, modules: varargs[string]): Option[Interpreter]=
-  var additions = scriptAdditions
+  if fileExists path:
+    var additions = scriptAdditions
   
-  for `mod` in modules:
-    additions.insert("import " & `mod` & "\n", 0)
-
-  let
-    scriptName = path.splitFile.name
-    intr = createInterpreter(path, nimlibs)
-    script = readFile(path)
-  for scriptProc in scriptTable:
-    intr.implementRoutine("*", scriptname, scriptProc.compName, scriptProc.vmProc)
-  when defined(debugScript): writeFile("main2.nims",additions & script)
-  intr.registerErrorHook proc(config, info, msg, severity: auto) {.gcsafe.} =
-    if severity == Error and config.error_counter >= config.error_max:
-        echo "Script Error ", msg, " ", info
-        raise (ref VMQuit)(info: info, msg: msg)
-  try:
-    intr.evalScript(llStreamOpen(additions & script))
-    result = option(intr)
-  except:
-    discard
+    for `mod` in modules:
+      additions.insert("import " & `mod` & "\n", 0)
+    
+    let
+      scriptName = path.splitFile.name
+      intr = createInterpreter(path, nimlibs)
+      script = readFile(path)
+    for scriptProc in scriptTable:
+      intr.implementRoutine("*", scriptname, scriptProc.compName, scriptProc.vmProc)
+    when defined(debugScript): writeFile("debugScript.nims",additions & script)
+    
+    #Throws Error so we can catch it
+    intr.registerErrorHook proc(config, info, msg, severity: auto) {.gcsafe.} =
+      if severity == Error and config.error_counter >= config.error_max:
+          echo "Script Error ", msg, " ", info
+          raise (ref VMQuit)(info: info, msg: msg)
+    try:
+      intr.evalScript(llStreamOpen(additions & script))
+      result = option(intr)
+    except:
+      discard
+  else:
+    echo "Error file doesnt exist at ", getCurrentDir() & path
 
 proc invoke*(intr: Interpreter, procName: string, args: openArray[PNode] = [], T: typeDesc): T=
   let 
@@ -121,5 +130,5 @@ proc invoke*(intr: Interpreter, procName: string, args: openArray[PNode] = [], T
     ret.floatVal.T
   elif T is string:
     ret.strVal
-  elif not T is void:
+  elif T isNot void:
     to((ret.strVal).parseJson, T)
