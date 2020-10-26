@@ -27,6 +27,7 @@ const scriptAdditions = block:
   var scriptAddition = """
 import json
 import macros, sets
+
 const 
   intNames = ["int", "int8", "int16", "int32", "int64", "uint", "uint8", "byte", "uint16", "uint32", "uint64"].toHashSet
   floatNames = ["float32", "float", "float64"].toHashSet
@@ -45,6 +46,8 @@ macro exportToNim(procDef: untyped): untyped =
     if (procDef[3][0].kind == nnkIdent and not ($procDef[3][0]).isPrimitive) or procDef[3][0].kind != nnkident:
       returnIsPrimitive = false
   newProcArgs.add procDef[3][0]
+  
+  var argConversion = newStmtList()
 
   for param in procDef[3]:
     if param.kind == nnkIdentDefs:
@@ -52,9 +55,14 @@ macro exportToNim(procDef: untyped): untyped =
       for declared in 0..<(param.len-2):
         #If it's not a primitive convert to json, else just send it
         newProcArgs.add(param)
-        if not ($param[^2]).isPrimitive or param[^2].kind != nnkident:
+        let 
+          paramName = param[declared]
+          paramType = param[^2]
+        if param[^2].kind != nnkident or not ($param[^2]).isPrimitive:
           newProcArgs[^1][^2] = ident("string")
           hasNonPrimitiveArgs = true
+          argConversion.add quote do:
+            let `paramName` = `paramName`.parseJson.to(`paramType`)
   if newProcArgs.len == 0:
     if procDef[0].kind == nnkident:
       procDef[0] = postfix(procDef[0],"*") 
@@ -69,7 +77,8 @@ macro exportToNim(procDef: untyped): untyped =
           newBody.add newLetStmt(arg[declared], newCall(newNimNode(nnkBracketExpr).add(ident("fromString"),newProcArgs[declared]), arg[declared]))
   newBody.add newCall(procDef[0], args)
   let exposedName = ident ($procDef[0]) & "Exported"
-  if hasReturn:
+  if hasReturn or hasNonPrimitiveArgs:
+    newBody.insert 0, argConversion
     if not returnIsPrimitive: newBody[0] = newDotExpr(newBody[0], ident("toString"))
     let exposedProc = newProc(postfix(exposedName, "*"), newProcArgs, newBody)
     if not returnIsPrimitive:
@@ -79,7 +88,6 @@ macro exportToNim(procDef: untyped): untyped =
     newBody = procDef[6]
     let exposedProc = newProc(postfix(exposedName, "*"), newProcArgs, newBody)
     result = newStmtList(exposedProc)
-
 proc fromString[T](a: string): T = parseJson(a).to(T)
 proc toString[T](a: T): string = $(% a)
 """
@@ -110,15 +118,13 @@ proc loadScript*(path: string, modules: varargs[string]): Option[Interpreter]=
     #Throws Error so we can catch it
     intr.registerErrorHook proc(config, info, msg, severity: auto) {.gcsafe.} =
       if severity == Error and config.error_counter >= config.error_max:
-          echo "Script Error ", msg, " ", info
-          raise (ref VMQuit)(info: info, msg: msg)
+        echo "Script Error: ", info, " ", msg
+        raise (ref VMQuit)(info: info, msg: msg)
     try:
       intr.evalScript(llStreamOpen(additions & script))
       result = option(intr)
     except:
       discard
-  else:
-    echo "Error file doesnt exist at ", getCurrentDir() & path
 
 proc invoke*(intr: Interpreter, procName: string, args: openArray[PNode] = [], T: typeDesc): T=
   let 

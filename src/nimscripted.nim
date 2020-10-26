@@ -6,6 +6,8 @@ import vmtable
 import json
 export VmArgs, nimeval, renderer, ast, types, llstream, vmdef, vm, json
 
+import typetraits
+
 macro exportToScript*(input: untyped): untyped=
   when not defined(scripted): return input
   var
@@ -53,7 +55,9 @@ macro exportToScript*(input: untyped): untyped=
   var 
     i = 0
     #Base to hold all the conversion
-    conversion = newStmtList().add quote do:
+    conversion = newStmtList()
+  if input[3].len > 1:
+    conversion.add quote do:
       let `data` = newJObject()
   #For each parameter convert to jsonnode
   for param in runTimeArgs:
@@ -83,8 +87,12 @@ macro exportToScript*(input: untyped): untyped=
     vmRuntimeDefine = $vmRuntimeProc.repr #We're just using the nim AST to generate the nimscript proc
     jsonData = ident("jsonData")
   #All parameters are stored in json in a `paramIndex` notation
-  var vmBody = newStmtList().add quote do:
+  var vmBody = newStmtList()
+
+  if input[3].len > 1:
+    vmBody.add quote do:
       let `jsonData` = `args`.getString(0).parseJson()
+
 
   var 
     callArgs: seq[NimNode]
