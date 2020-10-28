@@ -162,29 +162,29 @@ proc loadScript*(path: string, modules: varargs[string]): Option[Interpreter]=
     intr.implementRoutine("*", scriptname, "saveInt", proc(vm: VmArgs)=
       let a = vm.getInt(0)
       let buf = vm.getString(1)
-      vm.setResult(newStrNode(nkStrLit, saveInt(a, buf)))
+      vm.setResult(saveInt(a, buf))
     )
     intr.implementRoutine("*", scriptname, "saveFloat", proc(vm: VmArgs)=
       let a = vm.getFloat(0)
       let buf = vm.getString(1)
-      vm.setResult(newStrNode(nkStrLit, saveFloat(a, buf)))
+      vm.setResult(saveFloat(a, buf))
     )
     intr.implementRoutine("*", scriptname, "saveString", proc(vm: VmArgs)=
       let a = vm.getstring(0)
       let buf = vm.getString(1)
-      vm.setResult(newStrNode(nkStrLit, saveString(a, buf)))
+      vm.setResult(saveString(a, buf))
     )
     intr.implementRoutine("*", scriptname, "getInt", proc(vm: VmArgs)=
       let 
         buf = vm.getString(0)
         pos = vm.getInt(1)
-      vm.setResult(newIntNode(nkIntLit, getInt(buf, pos)))
+      vm.setResult(getInt(buf, pos))
     )
     intr.implementRoutine("*", scriptname, "getFloat", proc(vm: VmArgs)=
       let 
         buf = vm.getString(0)
         pos = vm.getInt(1)
-      vm.setResult(newFloatNode(nkFloatLit, getFloat(buf, pos)))
+      vm.setResult(getFloat(buf, pos))
     )
     for scriptProc in scriptTable:
       intr.implementRoutine("*", scriptname, scriptProc.compName, scriptProc.vmProc)

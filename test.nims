@@ -4,7 +4,7 @@ type B = object
   a: int
   b: A
 
-let b = B(a: 100, b: A(x: 300, y: 1000))
+let b = B(a: 100, b: A(x: 3.3210f, y: 1.321321f))
 
 var 
   buf = ""
