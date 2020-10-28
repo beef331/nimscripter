@@ -7,9 +7,16 @@ import awbject
 suite "nimscripter":
   test "mulby10":
     let intr = loadScript("tests/dothing.nims")
-    check 100 == intr.get.invoke("doThingExported", [10.toPNode], int)
-    check 300 == intr.get.invoke("doThingExported", [30.toPNode], int)
-    check 10000 == intr.get.invoke("doThingExported", [1000.toPNode], int)
+    var buff = ""
+    10.addToBuffer(buff)
+    check 100 == intr.get.invoke("doThingExported", [buff.toPNode()], int)
+    buff = ""
+    30.addToBuffer(buff)
+    check 300 == intr.get.invoke("doThingExported", [buff.toPNode()], int)
+    buff = ""
+    1000.addToBuffer(buff)
+    check 10000 == intr.get.invoke("doThingExported", [buff.toPNode()], int)
+  #[
   test "getSeqObjects":
     let
       intr = loadScript("tests/getawbjects.nims", "awbject")
@@ -19,3 +26,4 @@ suite "nimscripter":
         Awbject()]
       ret = intr.get.invoke("getAwbjectsExported", [], seq[Awbject])
     check expected == ret
+  ]#

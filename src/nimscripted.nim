@@ -1,8 +1,11 @@
 import macros
+import compiler / [nimeval, renderer, ast, types, llstream, vmdef, vm]
+import sets
+import strutils
 import vmtable
+export VmArgs, nimeval, renderer, ast, types, llstream, vmdef, vm
 import marshalns
-export marshalns
-
+export marshalns, VmArgs, getString, getFloat, getInt, Interpreter
 macro exportToScript*(input: untyped): untyped=
   let 
     rtnType = input[3][0]
@@ -59,20 +62,30 @@ macro exportToScript*(input: untyped): untyped=
     conversion.add quote do:
       var `paramsIdent` = ""
     for param in params:
+      let name = param.toStrLit
       conversion.add quote do:
         addToBuffer(`param`, `paramsIdent`)
   else: conversion = newEmptyNode()
 
+  let 
+    rtnbufIdent = ident("returnBuf")
   if hasRtnVal:
     vmRuntime[6] = quote do:
       `conversion`
-      var returnVal = ""
-      `vmCompName`().addToBuffer(returnVal)
-      args.setResult(returnVal)
+      var 
+        `rtnbufIdent` = ""
+        `posIdent`: BiggestInt = 0
+      `vmCompName`().addToBuffer(`rtnbufIdent`)
+      getFromBuffer(`rtnbufIdent`, `rtnType`, `posIdent`)
+    echo vmRuntime[^1][^2][0][0].treeRepr
+    if input[3].len > 1:
+      vmRuntime[^1][^2][0][0].add(ident("params"))
   else:
     vmRuntime[6] = quote do:
       `conversion`
-      `vmCompName`(params)
+      `vmCompName`()
+    if input[3].len > 1:
+      vmRuntime[^1][^1].add(ident("params"))
   let
     compDefine = $vmComp.repr
     runtimeDefine = $vmRuntime.repr
@@ -80,14 +93,12 @@ macro exportToScript*(input: untyped): untyped=
     runName = newStrLitNode($input[0])
     constr = quote do:
       static:
-        scriptedTable.add(VmProcSignature(vmCompDefine: `compDefine`, vmRunDefine: `runtimeDefine`, name: `runName`, compName: `compName`, vmProc: proc(`argIdent`: VmArgs)= `vmBody`))
+        scriptedTable.add(VmProcSignature(vmCompDefine: `compDefine`, vmRunDefine: `runtimeDefine`, name: `runName`, compName: `compName`, vmProc: proc(`argIdent`: VmArgs){.closure, gcsafe.}= `vmBody`))
   result = newStmtList().add(input, constr)
-  echo vmRuntime.repr
-  echo vmComp.repr
-  echo vmBody.repr
+
 type Test = object
   x, y: float
-
+  z: string
 proc test(a: int, b: float, c: string, t: Test) {.exportToScript.} = 
   echo a
   echo b
