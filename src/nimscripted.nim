@@ -95,4 +95,3 @@ macro exportToScript*(input: untyped): untyped=
       static:
         scriptedTable.add(VmProcSignature(vmCompDefine: `compDefine`, vmRunDefine: `runtimeDefine`, name: `runName`, compName: `compName`, vmProc: proc(`argIdent`: VmArgs){.closure, gcsafe.}= `vmBody`))
   result = newStmtList().add(input, constr)
-  echo result.repr
