@@ -1,4 +1,5 @@
 import streams
+import strutils
 
 proc saveInt*(a: BiggestInt): string =
   let ss = newStringStream("")
@@ -58,6 +59,7 @@ proc addToBuffer*[T](a: T, buf: var string) =
     buf &= saveInt(a.BiggestInt)
   elif T is string:
     buf &= saveString(a)
+
 
 proc getFromBuffer*(buff: string, T: typedesc, pos: var BiggestInt): T=
   if(pos > buff.len): echo "Buffer smaller than datatype requested"

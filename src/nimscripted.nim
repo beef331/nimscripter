@@ -6,6 +6,7 @@ import vmtable
 export VmArgs, nimeval, renderer, ast, types, llstream, vmdef, vm
 import marshalns
 export marshalns, VmArgs, getString, getFloat, getInt, Interpreter
+
 macro exportToScript*(input: untyped): untyped=
   let 
     rtnType = input[3][0]
@@ -64,7 +65,6 @@ macro exportToScript*(input: untyped): untyped=
     conversion.add quote do:
       var `paramsIdent` = ""
     for param in params:
-      let name = param.toStrLit
       conversion.add quote do:
         addToBuffer(`param`, `paramsIdent`)
   else: conversion = newEmptyNode()
@@ -77,11 +77,9 @@ macro exportToScript*(input: untyped): untyped=
       var 
         `rtnbufIdent` = ""
         `posIdent`: BiggestInt = 0
-      `vmCompName`().addToBuffer(`rtnbufIdent`)
-      getFromBuffer(`rtnbufIdent`, `rtnType`, `posIdent`)
-    echo vmRuntime[^1][^2][0][0].treeRepr
+      `vmCompName`().getFromBuffer(`rtnType`, `posIdent`)
     if input[3].len > 1:
-      vmRuntime[^1][^2][0][0].add(ident("params"))
+      vmRuntime[^1][^1][0][0].add(ident("params"))
   else:
     vmRuntime[6] = quote do:
       `conversion`
@@ -97,12 +95,4 @@ macro exportToScript*(input: untyped): untyped=
       static:
         scriptedTable.add(VmProcSignature(vmCompDefine: `compDefine`, vmRunDefine: `runtimeDefine`, name: `runName`, compName: `compName`, vmProc: proc(`argIdent`: VmArgs){.closure, gcsafe.}= `vmBody`))
   result = newStmtList().add(input, constr)
-
-type Test = object
-  x, y: float
-  z: string
-proc test(a: int, b: float, c: string, t: Test) {.exportToScript.} = 
-  echo a
-  echo b
-  echo c
-  echo t
+  echo result.repr

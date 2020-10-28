@@ -40,11 +40,13 @@ type Collection[T] = concept c
   c[0] is T
   c.len is int
 
+import strutils
+
 proc addToBuffer*[T](a: T, buf: var string) =
   when T is object or T is tuple:
     for field in a.fields:
       addToBuffer(field, buf)
-  elif T is Collection and T isnot string:
+  elif T is seq:
     addToBuffer(a.len, buf)
     for x in a:
       addToBuffer(x, buf)
@@ -63,7 +65,7 @@ proc getFromBuffer*(buff: string, T: typedesc, pos: var BiggestInt): T=
   elif T is seq:
     result.setLen(getFromBuffer(buff, int, pos))
     for x in result.mitems:
-      x = getFromBuffer(buff: string, x.typeof, pos)
+      x = getFromBuffer(buff, typeof(x), pos)
   elif T is SomeFloat:
     result = getFloat(buff, pos).T
     pos += sizeof(BiggestInt)
@@ -74,7 +76,8 @@ proc getFromBuffer*(buff: string, T: typedesc, pos: var BiggestInt): T=
     let len = getFromBuffer(buff, BiggestInt, pos)
     result = buff[pos..<(pos + len)]
     pos += len
-import macros, strutils
+
+import macros
 macro exportToNim(input: untyped): untyped=
   let 
     exposed = copy(input)
@@ -112,11 +115,9 @@ macro exportToNim(input: untyped): untyped=
   else:
     expBody.add quote do:
       `procName`()
-    echo expBody.treeRepr
     if params.len > 0: expBody[^1].add params
   exposed[^1] = expBody
   result = newStmtList(input, exposed)
-  echo result.repr
 """
   for vmProc in scriptTable:
     additions &= vmProc.vmCompDefine
