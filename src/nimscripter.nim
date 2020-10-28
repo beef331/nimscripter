@@ -21,80 +21,130 @@ proc toPNode*[T](a: T): PNode =
   elif T is string:
     newStrNode(nkStrLit, a)
   else: newStrNode(nkStrLit, $ (%a))
+import streams
 
-const scriptAdditions = block:
-  #Due to our reliance on json for object transfer need json
-  var scriptAddition = """
-import json
-import macros, sets
+proc saveInt(a: BiggestInt, buffer: string): string =
+  let ss = newStringStream(buffer)
+  ss.write(a)
+  ss.setPosition(0)
+  ss.readAll()
 
-const 
-  intNames = ["int", "int8", "int16", "int32", "int64", "uint", "uint8", "byte", "uint16", "uint32", "uint64"].toHashSet
-  floatNames = ["float32", "float", "float64"].toHashSet
+proc saveString(a: string, buffer: string): string = buffer & a
 
-proc isPrimitive(str: string): bool = str in intNames + floatNames + ["bool", "string"].toHashSet
+proc saveBool(a: bool, buffer: string): string =
+  let ss = newStringStream(buffer)
+  ss.write(a)
+  ss.setPosition(0)
+  ss.readAll()
 
-macro exportToNim(procDef: untyped): untyped =
-  var 
-    newProcArgs: seq[NimNode]
-    oldProcTypes: seq[NimNode]
-    hasReturn = false
-    returnIsPrimitive = true
-    hasNonPrimitiveArgs = false
-  if procDef[3][0].kind != nnkEmpty:
-    hasReturn = true
-    if (procDef[3][0].kind == nnkIdent and not ($procDef[3][0]).isPrimitive) or procDef[3][0].kind != nnkident:
-      returnIsPrimitive = false
-  newProcArgs.add procDef[3][0]
-  
-  var argConversion = newStmtList()
+proc saveFloat(a: BiggestFloat , buffer: string): string =
+  let ss = newStringStream(buffer)
+  ss.write(a)
+  ss.setPosition(0)
+  ss.readAll()
 
-  for param in procDef[3]:
-    if param.kind == nnkIdentDefs:
-      #For each declared variable here
-      for declared in 0..<(param.len-2):
-        #If it's not a primitive convert to json, else just send it
-        newProcArgs.add(param)
-        let 
-          paramName = param[declared]
-          paramType = param[^2]
-        if param[^2].kind != nnkident or not ($param[^2]).isPrimitive:
-          newProcArgs[^1][^2] = ident("string")
-          hasNonPrimitiveArgs = true
-          argConversion.add quote do:
-            let `paramName` = `paramName`.parseJson.to(`paramType`)
-  if newProcArgs.len == 0:
-    if procDef[0].kind == nnkident:
-      procDef[0] = postfix(procDef[0],"*") 
-    return procDef
-  var 
-    newBody = newStmtList()
-    args: seq[NimNode]
-  for i, arg in newProcArgs:
-      for declared in 0..<(arg.len-2):
-        args.add(arg[declared])
-        if not ($arg[^2]).isPrimitive:
-          newBody.add newLetStmt(arg[declared], newCall(newNimNode(nnkBracketExpr).add(ident("fromString"),newProcArgs[declared]), arg[declared]))
-  newBody.add newCall(procDef[0], args)
-  let exposedName = ident ($procDef[0]) & "Exported"
-  if hasReturn or hasNonPrimitiveArgs:
-    newBody.insert 0, argConversion
-    if not returnIsPrimitive: newBody[0] = newDotExpr(newBody[0], ident("toString"))
-    let exposedProc = newProc(postfix(exposedName, "*"), newProcArgs, newBody)
-    if not returnIsPrimitive:
-      exposedProc[3][0] = ident("string")
-    result = newStmtList(procDef, exposedProc)
-  else: 
-    newBody = procDef[6]
-    let exposedProc = newProc(postfix(exposedName, "*"), newProcArgs, newBody)
-    result = newStmtList(exposedProc)
-proc fromString[T](a: string): T = parseJson(a).to(T)
-proc toString[T](a: T): string = $(% a)
+proc getInt(buff: string, pos: BiggestInt): BiggestInt =
+  let ss = newStringStream(buff)
+  ss.setPosition(pos.int)
+  ss.read(result)
+
+proc getFloat(buff: string, pos: BiggestInt): BiggestFloat =
+  let ss = newStringStream(buff)
+  ss.setPosition(pos.int)
+  ss.read(result)
+
+
+
+type Collection[T] = concept c
+  c[0] is T
+
+proc addToBuffer[T](a: T, buf: var string) =
+  when T is object or T is tuple:
+    for field in a.fields:
+      addToBuffer(field, buf)
+  elif T is Collection:
+    addToBuffer(a.len, buf)
+    for x in a:
+      addToBuffer(a, buf)
+  elif T is SomeFloat:
+    buf &= saveFloat(a, buf)
+  elif T is SomeOrdinal:
+    buf &= saveInt(a.int, buf)
+
+
+proc getFromBuffer(buff: string, T: typedesc, pos: var int): T=
+  when T is object or T is tuple:
+    for field in a.fields:
+      field = getFromBuffer(buff, field.typeof, pos)
+  elif T is seq:
+    result.setLen(getFromBuffer(buff, int, pos))
+    for x in result.mitems:
+      x = getFromBuffer(buff: string, x.typeof, pos)
+  elif T is SomeFloat:
+    result = getFloat(buff, pos)
+    pos += sizeof(BiggestFloat)
+  elif T is SomeOrdinal:
+    result = getInt(buff, pos)
+    pos += sizeof(BiggestInt)
+  elif T is string:
+    let len = getInt(buff, pos)
+    result = buff[pos..<(pos+len)]
+    pos += len
+
+
+
+const scriptAdditions = """
+proc saveInt(a: int, buffer: string): string = discard
+
+proc saveString(a: string, buffer: string): string = discard
+
+proc saveBool(a: bool, buffer: string): string = discard
+
+proc saveFloat(a: float, buffer: string): string = discard
+
+proc getString(a: string, len: int, buf: string, pos: int): string = discard
+
+proc getFloat(buf: string, pos: BiggestInt): BiggestFloat = discard
+
+proc getInt(buf: string, pos: BiggestInt): BiggestInt = discard
+
+type Collection[T] = concept c
+  c[0] is T
+
+proc addToBuffer[T](a: T, buf: var string) =
+  when T is object or T is tuple:
+    for field in a.fields:
+      addToBuffer(field, buf)
+  elif T is Collection:
+    addToBuffer(a.len, buf)
+    for x in a:
+      addToBuffer(a, buf)
+  elif T is SomeFloat:
+    buf &= saveFloat(a, buf)
+  elif T is SomeOrdinal:
+    buf &= saveInt(a.int, buf)
+  elif T is string:
+    buf &= saveString(a, buf)
+
+proc getFromBuffer(buff: string, T: typedesc, pos: var BiggestInt): T=
+  when T is object or T is tuple:
+    for field in result.fields:
+      field = getFromBuffer(buff, field.typeof, pos)
+  elif T is seq:
+    result.setLen(getFromBuffer(buff, int, pos))
+    for x in result.mitems:
+      x = getFromBuffer(buff: string, x.typeof, pos)
+  elif T is SomeFloat:
+    result = getFloat(buff, pos).T
+    pos += sizeof(BiggestInt)
+  elif T is SomeOrdinal:
+    result = getInt(buff, pos).T
+    pos += sizeof(BiggestInt)
+  elif T is string:
+    let len = getInt(buff, pos)
+    result = buff[pos..<(pos+len)]
+    pos += len
 """
-  for scriptProc in scriptedTable:
-    scriptAddition &= scriptProc.vmCompDefine
-    scriptAddition &= scriptProc.vmRunDefine
-  scriptAddition
 
 type
   VMQuit* = object of CatchableError
@@ -103,14 +153,39 @@ type
 proc loadScript*(path: string, modules: varargs[string]): Option[Interpreter]=
   if fileExists path:
     var additions = scriptAdditions
-  
     for `mod` in modules:
       additions.insert("import " & `mod` & "\n", 0)
-    
     let
       scriptName = path.splitFile.name
       intr = createInterpreter(path, nimlibs)
       script = readFile(path)
+    intr.implementRoutine("*", scriptname, "saveInt", proc(vm: VmArgs)=
+      let a = vm.getInt(0)
+      let buf = vm.getString(1)
+      vm.setResult(newStrNode(nkStrLit, saveInt(a, buf)))
+    )
+    intr.implementRoutine("*", scriptname, "saveFloat", proc(vm: VmArgs)=
+      let a = vm.getFloat(0)
+      let buf = vm.getString(1)
+      vm.setResult(newStrNode(nkStrLit, saveFloat(a, buf)))
+    )
+    intr.implementRoutine("*", scriptname, "saveString", proc(vm: VmArgs)=
+      let a = vm.getstring(0)
+      let buf = vm.getString(1)
+      vm.setResult(newStrNode(nkStrLit, saveString(a, buf)))
+    )
+    intr.implementRoutine("*", scriptname, "getInt", proc(vm: VmArgs)=
+      let 
+        buf = vm.getString(0)
+        pos = vm.getInt(1)
+      vm.setResult(newIntNode(nkIntLit, getInt(buf, pos)))
+    )
+    intr.implementRoutine("*", scriptname, "getFloat", proc(vm: VmArgs)=
+      let 
+        buf = vm.getString(0)
+        pos = vm.getInt(1)
+      vm.setResult(newFloatNode(nkFloatLit, getFloat(buf, pos)))
+    )
     for scriptProc in scriptTable:
       intr.implementRoutine("*", scriptname, scriptProc.compName, scriptProc.vmProc)
     when defined(debugScript): writeFile("debugScript.nims",additions & script)
@@ -138,3 +213,5 @@ proc invoke*(intr: Interpreter, procName: string, args: openArray[PNode] = [], T
     ret.strVal
   elif T isNot void:
     to((ret.strVal).parseJson, T)
+
+discard loadScript("./test.nims", [])
