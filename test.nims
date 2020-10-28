@@ -11,3 +11,4 @@ var
   pos: BiggestInt = 0
 b.addToBuffer(buf)
 echo getFromBuffer(buf, B, pos)
+test(10, 42.424242f, "Hmmm it works", Test(x: 100, y: 321))
