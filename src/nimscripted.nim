@@ -22,6 +22,8 @@ macro exportToScript*(input: untyped): untyped=
     nameMangling = "" #Easiest way for the comp name
   for identDefs in input[3][1..^1]:
     let idType = ident($identDefs[^2])
+    if identDefs[^2].kind == nnkIdent:
+      nameMangling &= ($identDefs[^2])[0] & ($identDefs[^2])[^1]
     for param in identDefs[0..^3]:
       params.add param
       nameMangling.add($param)

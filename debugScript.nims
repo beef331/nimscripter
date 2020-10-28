@@ -84,13 +84,19 @@ macro exportToNim(input: untyped): untyped=
       expBody.add quote do:
         let `param` = getFromBuffer(`buffIdent`, `idType`, `posIdent`)
   let procName = if input[0].kind == nnkPostfix: input[0][0] else: input[0]
-  expBody.add quote do:
-    `procName`().addToBuffer(result)
-  expBody[^1][0][0].add params
+  if hasRetVal:
+    expBody.add quote do:
+      `procName`().addToBuffer(result)
+    if params.len > 0: expBody[^1][0][0].add params
+  else:
+    expBody.add quote do:
+      `procName`()
+    echo expBody.treeRepr
+    if params.len > 0: expBody[^1].add params
   exposed[^1] = expBody
   result = newStmtList(input, exposed)
   echo result.repr
-proc testabct(parameters: string) =
+proc testitaftbsgcTtt(parameters: string) =
   discard
 proc test(a: int; b: float; c: string; t: Test) =
   var params = ""
@@ -98,8 +104,8 @@ proc test(a: int; b: float; c: string; t: Test) =
   addToBuffer(b, params)
   addToBuffer(c, params)
   addToBuffer(t, params)
-  testabct(params)
-proc multiplyBy10a(parameters: string): string =
+  testitaftbsgcTtt(params)
+proc multiplyBy10ita(parameters: string): string =
   discard
 proc multiplyBy10(a: int): int =
   var params = ""
@@ -107,7 +113,7 @@ proc multiplyBy10(a: int): int =
   var
     returnBuf = ""
     pos: BiggestInt = 0
-  multiplyBy10a(params).addToBuffer(returnBuf)
+  multiplyBy10ita(params).addToBuffer(returnBuf)
   getFromBuffer(returnBuf, int, pos)
 proc doThing(a: int): int {.exportToNim.} =
   result = a.multiplyBy10

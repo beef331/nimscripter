@@ -105,9 +105,15 @@ macro exportToNim(input: untyped): untyped=
       expBody.add quote do:
         let `param` = getFromBuffer(`buffIdent`, `idType`, `posIdent`)
   let procName = if input[0].kind == nnkPostfix: input[0][0] else: input[0]
-  expBody.add quote do:
-    `procName`().addToBuffer(result)
-  expBody[^1][0][0].add params
+  if hasRetVal:
+    expBody.add quote do:
+      `procName`().addToBuffer(result)
+    if params.len > 0: expBody[^1][0][0].add params
+  else:
+    expBody.add quote do:
+      `procName`()
+    echo expBody.treeRepr
+    if params.len > 0: expBody[^1].add params
   exposed[^1] = expBody
   result = newStmtList(input, exposed)
   echo result.repr
@@ -160,7 +166,6 @@ proc loadScript*(path: string, modules: varargs[string]): Option[Interpreter]=
     
     #Throws Error so we can catch it
     intr.registerErrorHook proc(config, info, msg, severity: auto) {.gcsafe.} =
-      echo "Script Error: ", info, " ", msg
       if severity == Error and config.error_counter >= config.error_max:
         echo "Script Error: ", info, " ", msg
         raise (ref VMQuit)(info: info, msg: msg)
