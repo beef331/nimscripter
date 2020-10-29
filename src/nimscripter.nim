@@ -52,8 +52,11 @@ proc addToBuffer*[T](a: T, buf: var string) =
     else:
       for field in a.fields:
         addToBuffer(field, buf)
-  elif T is Collection and T isnot string:
+  elif T is seq:
     addToBuffer(a.len, buf)
+    for x in a:
+      addToBuffer(x, buf)
+  elif T is array:
     for x in a:
       addToBuffer(x, buf)
   elif T is SomeFloat:
@@ -79,6 +82,9 @@ proc getFromBuffer*(buff: string, T: typedesc, pos: var BiggestInt): T=
         field = getFromBuffer(buff, field.typeof, pos)
   elif T is seq:
     result.setLen(getFromBuffer(buff, int, pos))
+    for x in result.mitems:
+      x = getFromBuffer(buff, typeof(x), pos)
+  elif T is array:
     for x in result.mitems:
       x = getFromBuffer(buff, typeof(x), pos)
   elif T is SomeFloat:
