@@ -46,9 +46,15 @@ type Collection[T] = concept c
   c[0] is T
 
 proc addToBuffer*[T](a: T, buf: var string) =
-  when T is object or T is tuple:
-    for field in a.fields:
-      addToBuffer(field, buf)
+  when T is object or T is tuple or T is ref object:
+    when T is ref object:
+      addToBuffer(a.isNil, buf)
+      if a.isNil: return
+      for field in a[].fields:
+        addToBuffer(field, buf)
+    else:
+      for field in a.fields:
+        addToBuffer(field, buf)
   elif T is Collection and T isnot string:
     addToBuffer(a.len, buf)
     for x in a:
@@ -63,9 +69,17 @@ proc addToBuffer*[T](a: T, buf: var string) =
 
 proc getFromBuffer*(buff: string, T: typedesc, pos: var BiggestInt): T=
   if(pos > buff.len): echo "Buffer smaller than datatype requested"
-  when T is object or T is tuple:
-    for field in result.fields:
-      field = getFromBuffer(buff, field.typeof, pos)
+  when T is object or T is tuple or T is ref object:
+    when T is ref object:
+      let isNil = getFromBuffer(buff, bool, pos)
+      if isNil: 
+        return nil
+      else: result = T()
+      for field in result[].fields:
+        field = getFromBuffer(buff, field.typeof, pos)
+    else:
+      for field in result.fields:
+        field = getFromBuffer(buff, field.typeof, pos)
   elif T is seq:
     result.setLen(getFromBuffer(buff, int, pos))
     for x in result.mitems:
