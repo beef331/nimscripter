@@ -16,7 +16,6 @@ suite "nimscripter":
     buff = ""
     1000.addToBuffer(buff)
     check 10000 == intr.get.invoke("doThingExported", [buff.toPNode()], int)
-  #[
   test "getSeqObjects":
     let
       intr = loadScript("tests/getawbjects.nims", "awbject")
@@ -26,4 +25,3 @@ suite "nimscripter":
         Awbject()]
       ret = intr.get.invoke("getAwbjectsExported", [], seq[Awbject])
     check expected == ret
-  ]#

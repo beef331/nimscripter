@@ -31,8 +31,7 @@ macro exportToScript*(input: untyped): untyped=
       vmBody.add quote do:
         let `param` = getFromBuffer(`buffIdent`, `idType`, `posIdent`)
   let 
-    procName = input[0]
-
+    procName = if input[0].kind == nnkPostfix: input[0].basename else: input[0]
   if hasRtnVal:
     vmBody.add quote do:
       var data = ""
@@ -44,7 +43,7 @@ macro exportToScript*(input: untyped): untyped=
       `procName`()
     vmBody[^1].add(params)
 
-  let vmCompName = ident(($input[0]) & nameMangling)
+  let vmCompName = ident(($procName) & "Comp" & nameMangling)
 
   var
     vmRuntime = copy(input)
@@ -90,8 +89,9 @@ macro exportToScript*(input: untyped): untyped=
     compDefine = $vmComp.repr
     runtimeDefine = $vmRuntime.repr
     compName = newStrLitNode($vmCompName)
-    runName = newStrLitNode($input[0])
+    runName = newStrLitNode($procName)
     constr = quote do:
       static:
         scriptedTable.add(VmProcSignature(vmCompDefine: `compDefine`, vmRunDefine: `runtimeDefine`, name: `runName`, compName: `compName`, vmProc: proc(`argIdent`: VmArgs){.closure, gcsafe.}= `vmBody`))
   result = newStmtList().add(input, constr)
+  echo result.repr
