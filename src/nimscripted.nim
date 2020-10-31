@@ -25,6 +25,7 @@ macro exportToScript*(input: untyped): untyped=
         `buffIdent` = `argIdent`.getString(0)
         `posIdent`: BiggestInt = 0
 
+  #Foreach parameter we use it's name to generate some mangling to remove proc overlap
   for identDefs in input[3][1..^1]:
     let idType = ident($identDefs[^2])
     if identDefs[^2].kind == nnkIdent:
@@ -32,10 +33,12 @@ macro exportToScript*(input: untyped): untyped=
     for param in identDefs[0..^3]:
       params.add param
       nameMangling.add($param)
+      #Code to extract data directly from the string
       vmBody.add quote do:
         let `param` = getFromBuffer(`buffIdent`, `idType`, `posIdent`)
   let 
     procName = if input[0].kind == nnkPostfix: input[0].basename else: input[0]
+  #If we have a return value we set result of the Vmargs
   if hasRtnVal:
     vmBody.add quote do:
       var data = ""
@@ -47,22 +50,31 @@ macro exportToScript*(input: untyped): untyped=
       `procName`()
     vmBody[^1].add(params)
 
+  #Our mangled name, bless disruptek's heart
   let vmCompName = ident(($procName) & "Comp" & nameMangling)
 
+  #We're abusing Nim's AST generation to make usable code for the VM
   var
     vmRuntime = copy(input)
     vmComp = copy(input)
   vmComp[0] = vmCompName
+  #If we have more than 1 argument def, remove them as we just need `procName`(params: string): string
   if vmComp[3].len > 2:
     vmComp[3].del(2, vmComp[3].len - 2)
+  #If we have any parameters replace it with a string named "parameters"
   if vmComp[3].len > 1:
     vmComp[3][1] = newIdentDefs(ident("parameters"), ident("string"))
+  #We always return data as a binary string
   if hasRtnVal:
     vmComp[3][0] = ident("string")
   vmComp[6] = quote do:
     discard
   
   var conversion = newStmtList()
+  #[
+    When when we have parameters we need to add them
+    to a string buffer to send to nim
+  ]#
   if params.len > 0:
     let paramsIdent = ident("params")
     conversion.add quote do:
@@ -74,7 +86,9 @@ macro exportToScript*(input: untyped): untyped=
 
   let 
     rtnbufIdent = ident("returnBuf")
+
   if hasRtnVal:
+    #We need to extract the return value from the proc call
     vmRuntime[6] = quote do:
       `conversion`
       var 
@@ -84,11 +98,14 @@ macro exportToScript*(input: untyped): untyped=
     if input[3].len > 1:
       vmRuntime[^1][^1][0][0].add(ident("params"))
   else:
+    #We just need to call the proc
     vmRuntime[6] = quote do:
       `conversion`
       `vmCompName`()
     if input[3].len > 1:
       vmRuntime[^1][^1].add(ident("params"))
+
+  #Make all of our finalized data
   let
     compDefine = $vmComp.repr
     runtimeDefine = $vmRuntime.repr
@@ -97,6 +114,7 @@ macro exportToScript*(input: untyped): untyped=
     constr = quote do:
       static:
         scriptedTable.add(VmProcSignature(vmCompDefine: `compDefine`, vmRunDefine: `runtimeDefine`, name: `runName`, compName: `compName`, vmProc: proc(`argIdent`: VmArgs){.closure, gcsafe.}= `vmBody`))
+  
   result = newStmtList().add(input, constr)
 
 macro exportCode*(typeSect: untyped): untyped=
