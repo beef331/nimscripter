@@ -117,7 +117,7 @@ macro exportToNim(input: untyped): untyped=
     expBody = newStmtList().add quote do:
       var `posIdent`: BiggestInt = 0
   for identDefs in input[3][1..^1]:
-    let idType = ident($identDefs[^2])
+    let idType = identDefs[^2]
     for param in identDefs[0..^3]:
       params.add param
       expBody.add quote do:
