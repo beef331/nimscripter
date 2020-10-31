@@ -19,9 +19,7 @@ proc toPNode*(s: string): PNode = newStrNode(nkStrLit, s)
 
 const scriptAdditions = static:
   var additions = block:"""
-type Test = object
-  x, y: float
-  z: string
+
 proc saveInt(a: BiggestInt): string = discard
 
 proc saveString(a: string): string = discard
@@ -35,10 +33,6 @@ proc getString(a: string, len: int, buf: string, pos: int): string = discard
 proc getFloat(buf: string, pos: BiggestInt): BiggestFloat = discard
 
 proc getInt(buf: string, pos: BiggestInt): BiggestInt = discard
-
-type Collection[T] = concept c
-  c[0] is T
-  c.len is int
 
 import strutils
 
