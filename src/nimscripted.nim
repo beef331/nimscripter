@@ -16,11 +16,15 @@ macro exportToScript*(input: untyped): untyped=
     posIdent = ident("pos")
   var
     params: seq[NimNode]
-    vmBody = newStmtList().add quote do:
+    vmBody = newStmtList()
+    nameMangling = "" #Easiest way for the comp name
+  
+  #Only get params if we have them
+  if input[3].len > 1: vmBody.add quote do:
       var 
         `buffIdent` = `argIdent`.getString(0)
         `posIdent`: BiggestInt = 0
-    nameMangling = "" #Easiest way for the comp name
+
   for identDefs in input[3][1..^1]:
     let idType = ident($identDefs[^2])
     if identDefs[^2].kind == nnkIdent:
@@ -94,4 +98,10 @@ macro exportToScript*(input: untyped): untyped=
       static:
         scriptedTable.add(VmProcSignature(vmCompDefine: `compDefine`, vmRunDefine: `runtimeDefine`, name: `runName`, compName: `compName`, vmProc: proc(`argIdent`: VmArgs){.closure, gcsafe.}= `vmBody`))
   result = newStmtList().add(input, constr)
-  echo result.repr
+
+macro exportCode*(typeSect: untyped): untyped=
+  let a = newStrLitNode($typeSect.repr)
+  typeSect.add quote do:
+    static:
+      exportedCode.add `a`
+  result = typeSect

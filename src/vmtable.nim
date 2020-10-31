@@ -12,6 +12,9 @@ type
     compName*: string
     vmProc*: proc(args: VmArgs){.closure, gcsafe.}
 
-var scriptedTable*{.compileTime.}: seq[VmProcSignature]
+var 
+  scriptedTable*{.compileTime.}: seq[VmProcSignature]
+  exportedCode*{.compileTime.}: seq[string]
 const 
   scriptTable* = scriptedTable
+  vmTypeDefs* = exportedCode

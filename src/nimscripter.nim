@@ -140,6 +140,8 @@ macro exportToNim(input: untyped): untyped=
   exposed[^1] = expBody
   result = newStmtList(input, exposed)
 """
+  for types in vmtypeDefs:
+    additions &= types
   for vmProc in scriptTable:
     additions &= vmProc.vmCompDefine
     additions &= vmProc.vmRunDefine

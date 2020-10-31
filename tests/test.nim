@@ -1,9 +1,9 @@
 
 import unittest
 import exportedprocs
-#Needs to be exported after exposed procs
-import ../src/nimscripter
 import awbject
+#Needs to be exported after anything that implements nimscripted procs
+import ../src/nimscripter
 suite "nimscripter":
   test "mulby10":
     let intr = loadScript("tests/dothing.nims")
@@ -18,7 +18,7 @@ suite "nimscripter":
     check 10000 == intr.get.invoke("doThingExported", [buff.toPNode()], int)
   test "getSeqObjects":
     let
-      intr = loadScript("tests/getawbjects.nims", "awbject")
+      intr = loadScript("tests/getawbjects.nims")
       expected = @[
         Awbject(a: 100, b: @[10f32, 30, 3.1415], name: "Steve"), 
         Awbject(a: 42, b: @[6.28f32], name: "Tau is better"),
