@@ -1,1 +1,0 @@
-proc test(): seq[int] {.exportToNim.}= @[1002, 321, 32141]
