@@ -34,7 +34,7 @@ proc fancyStuff(a: int) {.exportToNim}= assert a == 10
 ```
 
 ### Appending Code To Nimscript
-You can either write modules to import or use the `exportCode` macro to send code to Nimscript.
+You can either write modules to import or use the `exportCode` macro to send code to Nimscript. The code is included as is to Nimscript and not ran in Nim.
 ```nim
 #.nim file
 exportCode:
