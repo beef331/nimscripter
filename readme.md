@@ -17,6 +17,8 @@ assert doThing() == 42
 ```
 When compiled with `-d:scripted` the assertion will be ran and no issue found.
 
+Compiling with `-d:debugScript` will output the constructed Nimscript for easier debugging in expansion of this package.
+
 ### Calling code from Nim
 Inside Nimscript the `exportToNim` macro can be applied to procs to enable calling from Nim, the following code will demonstrate how. The name of the proc to call has "Exported" appended to it
 ```nim
