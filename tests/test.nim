@@ -23,5 +23,5 @@ suite "nimscripter":
         Awbject(a: 100, b: @[10f32, 30, 3.1415], name: "Steve"), 
         Awbject(a: 42, b: @[6.28f32], name: "Tau is better"),
         Awbject()]
-      ret = intr.get.invoke("getAwbjectsExported", T =seq[Awbject])
+      ret = intr.get.invoke("getAwbjectsExported", T = seq[Awbject])
     check expected == ret

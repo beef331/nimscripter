@@ -7,7 +7,7 @@ export VmArgs, nimeval, renderer, ast, types, llstream, vmdef, vm
 import marshalns
 export marshalns, VmArgs, getString, getFloat, getInt, Interpreter
 
-macro exportToScript*(input: untyped): untyped=
+proc exposeProc(input: NimNode): NimNode=
   let 
     rtnType = input[3][0]
     hasRtnVal = rtnType.kind != nnkEmpty
@@ -123,3 +123,13 @@ macro exportCode*(typeSect: untyped): untyped=
     static:
       exportedCode.add `a`
   result = typeSect
+
+macro exportToScript*(input: untyped): untyped =
+  if input.kind == nnkProcDef:
+    result = input.exposeProc
+  else:
+    for i in 0..<input.len:
+      var node = input[i]
+      if node.kind == nnkProcDef:
+        input[i] = node.exposeProc
+    result = input
