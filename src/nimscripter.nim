@@ -15,8 +15,6 @@ var
   nimlibs = nimdump[nimdump.find("-- end of list --")+18..^2].split
 nimlibs.sort
 
-proc toPNode*(s: string): PNode = newStrNode(nkStrLit, s)
-
 const scriptAdditions = static:
   var additions = block:"""
 
@@ -196,10 +194,14 @@ proc loadScript*(path: string, modules: varargs[string]): Option[Interpreter]=
     when defined(debugScript):
       echo "File not found"
 
-proc invoke*(intr: Interpreter, procName: string, args: openArray[PNode] = [], T: typeDesc = void): T=
+proc invoke*(intr: Interpreter, procName: string, argBuffer: string = "",  T: typeDesc = void): T=
   let 
     foreignProc = intr.selectRoutine(procName)
-    ret = intr.callRoutine(foreignProc, args)
+  var ret: PNode
+  if argBuffer.len > 0:
+    ret = intr.callRoutine(foreignProc, [newStrNode(nkStrLit, argBuffer)])
+  else:
+    ret = intr.callRoutine(foreignProc, [])
   when T isnot void:
     var pos: BiggestInt
     getFromBuffer(ret.strVal, T, pos)
