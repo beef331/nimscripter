@@ -6,6 +6,9 @@ Nimscripter is enables easy interop between Nim and Nimscript for realtime scrip
 Install Nimscripter with Nimble then create a .nim file and .nims file.
 
 Make a folder entitled `stdlib` and copy copy all Nim files you wish to ship as a stdlib from Nim's stdlib and or any of your own files.`system.nim` and the `system` folder are required, but you can copy any other pure libraries and ship them, though they're only usable if they support Nimscript. If you use choosenim you can find the the Nim stdlib to copy from inside `~/.choosenim/toolchains/nim-version/lib`.
+
+An example of the shipped stdlib is in the root directory of this repo.
+
 ```nim
 #Below is code to be  in the .nim file
 import nimscripted #Where the macros come from
