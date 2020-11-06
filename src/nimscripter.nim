@@ -9,12 +9,6 @@ export destroyInterpreter, options, Interpreter
 import marshalns
 export marshalns
 
-# This uses your Nim install to find the standard library instead of hard-coding it
-var
-  nimdump = execProcess("nim dump")
-  nimlibs = nimdump[nimdump.find("-- end of list --")+18..^2].split
-nimlibs.sort
-
 const scriptAdditions = static:
   var additions = block:"""
 
@@ -150,7 +144,7 @@ proc loadScript*(path: string, modules: varargs[string]): Option[Interpreter]=
       additions.insert("import " & `mod` & "\n", 0)
     let
       scriptName = path.splitFile.name
-      intr = createInterpreter(path, nimlibs)
+      intr = createInterpreter(path, ["./stdlib"])
       script = readFile(path)
     intr.implementRoutine("*", scriptname, "saveInt", proc(vm: VmArgs)=
       let a = vm.getInt(0)
