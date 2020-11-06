@@ -137,14 +137,14 @@ type
   VMQuit* = object of CatchableError
     info*: TLineInfo
 
-proc loadScript*(path: string, modules: varargs[string]): Option[Interpreter]=
+proc loadScript*(path: string, modules: varargs[string], stdPath: string = "./stdlib"): Option[Interpreter]=
   if fileExists path:
     var additions = scriptAdditions
     for `mod` in modules:
       additions.insert("import " & `mod` & "\n", 0)
     let
       scriptName = path.splitFile.name
-      intr = createInterpreter(path, ["./stdlib"])
+      intr = createInterpreter(path, [stdPath])
       script = readFile(path)
     intr.implementRoutine("*", scriptname, "saveInt", proc(vm: VmArgs)=
       let a = vm.getInt(0)
