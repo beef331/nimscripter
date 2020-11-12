@@ -1,7 +1,4 @@
-import macros
 import compiler / [nimeval, renderer, ast, types, llstream, vmdef, vm]
-import sets
-import strutils
 export VmArgs, nimeval, renderer, ast, types, llstream, vmdef, vm
 
 type

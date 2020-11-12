@@ -1,5 +1,4 @@
 import streams
-import strutils
 
 proc saveInt*(a: BiggestInt): string =
   let ss = newStringStream("")

@@ -1,5 +1,5 @@
-import compiler / [nimeval, renderer, ast, types, llstream, vmdef, vm, lineinfos, passes]
-import os, osproc, strutils, algorithm
+import compiler / [nimeval, renderer, ast, types, llstream, vmdef, vm, lineinfos]
+import os
 import json
 import options
 import vmtable
@@ -127,7 +127,7 @@ macro exportToNim(input: untyped): untyped=
   result = newStmtList(input, exposed)
 """
   for types in vmtypeDefs:
-    additions &= types
+    additions &= types & "\n"
   for vmProc in scriptTable:
     additions &= vmProc.vmCompDefine
     additions &= vmProc.vmRunDefine
@@ -137,15 +137,15 @@ type
   VMQuit* = object of CatchableError
     info*: TLineInfo
 
-proc loadScript*(path: string, modules: varargs[string], stdPath: string = "./stdlib"): Option[Interpreter]=
-  if fileExists path:
+proc loadScript*(script: string, isFile: bool = true, modules: varargs[string], stdPath: string = "./stdlib"): Option[Interpreter]=
+  if not isFile or fileExists(script):
     var additions = scriptAdditions
     for `mod` in modules:
       additions.insert("import " & `mod` & "\n", 0)
     let
-      scriptName = path.splitFile.name
-      intr = createInterpreter(path, [stdPath])
-      script = readFile(path)
+      scriptName = if isFile: script.splitFile.name else: "script"
+      intr = createInterpreter(scriptName, [stdPath])
+      script = if isFile: readFile(script) else: script
     intr.implementRoutine("*", scriptname, "saveInt", proc(vm: VmArgs)=
       let a = vm.getInt(0)
       vm.setResult(saveInt(a))

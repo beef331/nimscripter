@@ -5,7 +5,7 @@ import awbject
 #Needs to be exported after anything that implements nimscripted procs
 import ../src/nimscripter
 suite "nimscripter":
-  test "mulby10":
+  test "Multiply By 10":
     let intr = loadScript("tests/dothing.nims")
     var buff = ""
     10.addToBuffer(buff)
@@ -16,7 +16,7 @@ suite "nimscripter":
     buff = ""
     1000.addToBuffer(buff)
     check 10000 == intr.get.invoke("doThingExported", buff, int)
-  test "getSeqObjects":
+  test "Get Seq Objects":
     let
       intr = loadScript("tests/getawbjects.nims")
       expected = @[
@@ -25,3 +25,15 @@ suite "nimscripter":
         Awbject()]
       ret = intr.get.invoke("getAwbjectsExported", T = seq[Awbject])
     check expected == ret
+  test "Non File Script":
+    let script = """proc doThing(a: int): int {.exportToNim.} = result = a.multiplyBy10"""
+    let intr = loadScript(script, false)
+    var buff = ""
+    10.addToBuffer(buff)
+    check 100 == intr.get.invoke("doThingExported", buff, int)
+    buff = ""
+    30.addToBuffer(buff)
+    check 300 == intr.get.invoke("doThingExported", buff, int)
+    buff = ""
+    1000.addToBuffer(buff)
+    check 10000 == intr.get.invoke("doThingExported", buff, int)

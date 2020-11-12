@@ -1,2 +1,1 @@
-proc doThing(a: int): int {.exportToNim.} =
-  result = a.multiplyBy10
+proc doThing(a: int): int {.exportToNim.} = result = a.multiplyBy10
