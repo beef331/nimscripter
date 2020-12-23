@@ -1,4 +1,4 @@
-import nimscripted
+import nimscripter/nimscripted
 exportCode:
   type Awbject* = object
     a*: int

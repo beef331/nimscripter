@@ -3,7 +3,7 @@ import unittest
 import exportedprocs
 import awbject
 #Needs to be exported after anything that implements nimscripted procs
-import ../src/nimscripter
+import nimscripter/nimscripter
 suite "nimscripter":
   test "Multiply By 10":
     let intr = loadScript("tests/dothing.nims")

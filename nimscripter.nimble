@@ -1,14 +1,12 @@
 # Package
 
 version       = "0.1.0"
-author        = "Jason"
-description   = "A new awesome nimble package"
+author        = "Jason Beetham"
+description   = "A easy to use Nimscript interop package"
 license       = "MIT"
 srcDir        = "src"
 
 
-
 # Dependencies
-
 requires "nim >= 1.4.0"
 requires "compiler"

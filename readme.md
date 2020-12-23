@@ -11,7 +11,7 @@ An example of the shipped stdlib is in the root directory of this repo.
 
 ```nim
 #Below is code to be  in the .nim file
-import nimscripted #Where the macros come from
+import nimscripter/nimscripted #Where the macros come from
 proc doThing(): int {.exportToScript.} = 42 #Will create a `doThing` proc in Nimscript
 import nimscripter #Must appear after any wanted nimscript procs
 let intr = loadScript("script.nims")
@@ -44,6 +44,7 @@ proc fancyStuff(a: int) {.exportToNim}= assert a == 10
 You can either write modules to import or use the `exportCode` macro to send code to Nimscript. The code is included as is to Nimscript and not ran in Nim.
 ```nim
 #.nim file
+import nimscripter/nimscripted
 exportCode:
   type Awbject = object
     a, b, c: int
