@@ -1,7 +1,5 @@
 import compiler / [nimeval, renderer, ast, types, llstream, vmdef, vm, lineinfos]
-import os
-import json
-import options
+import std/[os, json, options, sugar]
 import vmtable
 import nimscripted
 export destroyInterpreter, options, Interpreter
@@ -10,7 +8,7 @@ import marshalns
 export marshalns
 
 const scriptAdditions = static:
-  var additions = block:"""
+  var additions = block: """
 
 proc saveInt(a: BiggestInt): string = discard
 
@@ -137,43 +135,53 @@ type
   VMQuit* = object of CatchableError
     info*: TLineInfo
 
-proc loadScript*(script: string, isFile: bool = true, modules: varargs[string], stdPath: string = "./stdlib"): Option[Interpreter]=
+proc implementRoutines(i: Interpreter, scriptName: string) =
+  i.implementRoutine("*", scriptname, "saveInt", proc(vm: VmArgs) =
+    let a = vm.getInt(0)
+    vm.setResult(saveInt(a))
+  )
+  i.implementRoutine("*", scriptname, "saveFloat", proc(vm: VmArgs) =
+    let a = vm.getFloat(0)
+    vm.setResult(saveFloat(a))
+  )
+  i.implementRoutine("*", scriptname, "saveString", proc(vm: VmArgs) =
+    let a = vm.getstring(0)
+    vm.setResult(saveString(a))
+  )
+  i.implementRoutine("*", scriptname, "getInt", proc(vm: VmArgs) =
+    let
+      buf = vm.getString(0)
+      pos = vm.getInt(1)
+    vm.setResult(getInt(buf, pos))
+  )
+  i.implementRoutine("*", scriptname, "getFloat", proc(vm: VmArgs) =
+    let
+      buf = vm.getString(0)
+      pos = vm.getInt(1)
+    vm.setResult(getFloat(buf, pos))
+  )
+
+proc loadScript*(script: string, isFile: bool = true, modules: varargs[string],
+    stdPath: string = "./stdlib"): Option[Interpreter] =
   if not isFile or fileExists(script):
     var additions = scriptAdditions
     for `mod` in modules:
       additions.insert("import " & `mod` & "\n", 0)
     let
       scriptName = if isFile: script.splitFile.name else: "script"
-      intr = createInterpreter(scriptName, [stdPath])
+    var searchPaths = collect(newSeq):
+        for x in walkDir(stdPath):
+          if x.kind == pcDir:
+            x.path
+    searchPaths.insert stdPath, 0
+    let
+      intr = createInterpreter(scriptName, searchPaths)
       script = if isFile: readFile(script) else: script
-    intr.implementRoutine("*", scriptname, "saveInt", proc(vm: VmArgs)=
-      let a = vm.getInt(0)
-      vm.setResult(saveInt(a))
-    )
-    intr.implementRoutine("*", scriptname, "saveFloat", proc(vm: VmArgs)=
-      let a = vm.getFloat(0)
-      vm.setResult(saveFloat(a))
-    )
-    intr.implementRoutine("*", scriptname, "saveString", proc(vm: VmArgs)=
-      let a = vm.getstring(0)
-      vm.setResult(saveString(a))
-    )
-    intr.implementRoutine("*", scriptname, "getInt", proc(vm: VmArgs)=
-      let 
-        buf = vm.getString(0)
-        pos = vm.getInt(1)
-      vm.setResult(getInt(buf, pos))
-    )
-    intr.implementRoutine("*", scriptname, "getFloat", proc(vm: VmArgs)=
-      let 
-        buf = vm.getString(0)
-        pos = vm.getInt(1)
-      vm.setResult(getFloat(buf, pos))
-    )
+    intr.implementRoutines(scriptName)
     for scriptProc in scriptTable:
       intr.implementRoutine("*", scriptname, scriptProc.compName, scriptProc.vmProc)
-    when defined(debugScript): writeFile("debugScript.nims",additions & script)
-    
+    when defined(debugScript): writeFile("debugScript.nims", additions & script)
+
     #Throws Error so we can catch it
     intr.registerErrorHook proc(config, info, msg, severity: auto) {.gcsafe.} =
       if severity == Error and config.error_counter >= config.error_max:
@@ -188,8 +196,8 @@ proc loadScript*(script: string, isFile: bool = true, modules: varargs[string], 
     when defined(debugScript):
       echo "File not found"
 
-proc invoke*(intr: Interpreter, procName: string, argBuffer: string = "",  T: typeDesc = void): T=
-  let 
+proc invoke*(intr: Interpreter, procName: string, argBuffer: string = "", T: typeDesc = void): T =
+  let
     foreignProc = intr.selectRoutine(procName)
   var ret: PNode
   if argBuffer.len > 0:

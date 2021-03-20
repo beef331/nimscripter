@@ -5,8 +5,8 @@ export VmArgs, nimeval, renderer, ast, types, llstream, vmdef, vm
 import marshalns
 export marshalns, VmArgs, getString, getFloat, getInt, Interpreter
 
-proc exposeProc(input: NimNode): NimNode=
-  let 
+proc exposeProc(input: NimNode): NimNode =
+  let
     rtnType = input[3][0]
     hasRtnVal = rtnType.kind != nnkEmpty
     argIdent = ident("args")
@@ -16,12 +16,12 @@ proc exposeProc(input: NimNode): NimNode=
     params: seq[NimNode]
     vmBody = newStmtList()
     nameMangling = "" #Easiest way for the comp name
-  
+
   #Only get params if we have them
   if input[3].len > 1: vmBody.add quote do:
-      var 
-        `buffIdent` = `argIdent`.getString(0)
-        `posIdent`: BiggestInt = 0
+    var
+      `buffIdent` = `argIdent`.getString(0)
+      `posIdent`: BiggestInt = 0
 
   #Foreach parameter we use it's name to generate some mangling to remove proc overlap
   for identDefs in input[3][1..^1]:
@@ -34,7 +34,7 @@ proc exposeProc(input: NimNode): NimNode=
       #Code to extract data directly from the string
       vmBody.add quote do:
         let `param` = getFromBuffer(`buffIdent`, `idType`, `posIdent`)
-  let 
+  let
     procName = if input[0].kind == nnkPostfix: input[0].basename else: input[0]
   #If we have a return value we set result of the Vmargs
   if hasRtnVal:
@@ -67,7 +67,7 @@ proc exposeProc(input: NimNode): NimNode=
     vmComp[3][0] = ident("string")
   vmComp[6] = quote do:
     discard
-  
+
   var conversion = newStmtList()
   #[
     When when we have parameters we need to add them
@@ -82,14 +82,14 @@ proc exposeProc(input: NimNode): NimNode=
         addToBuffer(`param`, `paramsIdent`)
   else: conversion = newEmptyNode()
 
-  let 
+  let
     rtnbufIdent = ident("returnBuf")
 
   if hasRtnVal:
     #We need to extract the return value from the proc call
     vmRuntime[6] = quote do:
       `conversion`
-      var 
+      var
         `rtnbufIdent` = ""
         `posIdent`: BiggestInt = 0
       `vmCompName`().getFromBuffer(`rtnType`, `posIdent`)
@@ -102,7 +102,6 @@ proc exposeProc(input: NimNode): NimNode=
       `vmCompName`()
     if input[3].len > 1:
       vmRuntime[^1][^1].add(ident("params"))
-
   #Make all of our finalized data
   let
     compDefine = $vmComp.repr
@@ -111,11 +110,13 @@ proc exposeProc(input: NimNode): NimNode=
     runName = newStrLitNode($procName)
     constr = quote do:
       static:
-        scriptedTable.add(VmProcSignature(vmCompDefine: `compDefine`, vmRunDefine: `runtimeDefine`, name: `runName`, compName: `compName`, vmProc: proc(`argIdent`: VmArgs){.closure, gcsafe.}= `vmBody`))
-  
+        scriptedTable.add(VmProcSignature(vmCompDefine: `compDefine`, vmRunDefine: `runtimeDefine`,
+            name: `runName`, compName: `compName`, vmProc: proc(`argIdent`: VmArgs){.closure,
+            gcsafe.} = `vmBody`))
+
   result = newStmtList().add(input, constr)
 
-macro exportCode*(typeSect: untyped): untyped=
+macro exportCode*(typeSect: untyped): untyped =
   let a = newStrLitNode($typeSect.repr)
   typeSect.add quote do:
     static:

@@ -33,7 +33,7 @@ let intr = loadscript("script.nims")
 var buf = ""
 10.addToBuffer(buff)
 if intr.isSome:
-  intr.get.invoke("fancyStuffExported", [buf.toPnode], void) #Void is the return type
+  intr.get.invoke("fancyStuffExported", buff, void) #Void is the return type
 ```
 ```nim
 #Nimscript file
