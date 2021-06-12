@@ -37,3 +37,11 @@ suite "nimscripter":
     buff = ""
     1000.addToBuffer(buff)
     check 10000 == intr.get.invoke("doThingExported", buff, int)
+  test "Import flat standard modules":
+    let script = "import strutils" # stdlib/pure/strutils.nim
+    let intr = loadScript(script, false)
+    check intr.isSome
+  test "Import deep standard modules":
+    let script = "import sequtils" # stdlib/pure/collections/sequtils.nim
+    let intr = loadScript(script, false)
+    check intr.isSome

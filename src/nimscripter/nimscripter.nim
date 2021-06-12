@@ -170,9 +170,8 @@ proc loadScript*(script: string, isFile: bool = true, modules: varargs[string],
     let
       scriptName = if isFile: script.splitFile.name else: "script"
     var searchPaths = collect(newSeq):
-        for x in walkDir(stdPath):
-          if x.kind == pcDir:
-            x.path
+        for dir in walkDirRec(stdPath, {pcDir}):
+          dir
     searchPaths.insert stdPath, 0
     let
       intr = createInterpreter(scriptName, searchPaths)
