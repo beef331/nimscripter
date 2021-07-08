@@ -173,6 +173,8 @@ proc loadScript*(script: string, isFile: bool = true, modules: varargs[string],
         for dir in walkDirRec(stdPath, {pcDir}):
           dir
     searchPaths.insert stdPath, 0
+    if isFile:
+      searchPaths.add script.parentDir
     let
       intr = createInterpreter(scriptName, searchPaths)
       script = if isFile: readFile(script) else: script
