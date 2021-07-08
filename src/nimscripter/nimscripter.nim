@@ -197,7 +197,7 @@ proc loadScript*(script: string, isFile: bool = true, modules: varargs[string],
 
 proc invoke*(intr: Interpreter, procName: string, argBuffer: string = "", T: typeDesc = void): T =
   let
-    foreignProc = intr.selectRoutine(procName)
+    foreignProc = intr.selectRoutine(procName & "Exported")
   var ret: PNode
   if argBuffer.len > 0:
     ret = intr.callRoutine(foreignProc, [newStrNode(nkStrLit, argBuffer)])

@@ -25,7 +25,7 @@ When compiled with `-d:scripted` the assertion will be ran and no issue found.
 Compiling with `-d:debugScript` will output the constructed Nimscript for easier debugging in expansion of this package.
 
 ### Calling code from Nim
-Inside Nimscript the `exportToNim` macro can be applied to procs to enable calling from Nim, the following code will demonstrate how. The name of the proc to call has "Exported" appended to it
+Inside Nimscript the `exportToNim` macro can be applied to procs to enable calling from Nim, the following code will demonstrate how.
 ```nim
 #.nim file below
 import nimscripter
@@ -33,7 +33,7 @@ let intr = loadscript("script.nims")
 var buf = ""
 10.addToBuffer(buff)
 if intr.isSome:
-  intr.get.invoke("fancyStuffExported", buff, void) #Void is the return type
+  intr.get.invoke("fancyStuff", buff, void) #Void is the return type
 ```
 ```nim
 #Nimscript file
