@@ -69,12 +69,12 @@ proc addToBuffer*[T](a: T, buf: var string) =
     buf &= saveString(a)
 
 
-proc getFromBuffer*(buff: string, T: typedesc, pos: var BiggestInt): T=
+proc getFromBuffer*[T](buff: string, pos: var BiggestInt): T =
   if(pos > buff.len): echo "Buffer smaller than datatype requested"
   when T is object or T is tuple or T is ref object:
     when T is ref object:
       let isNil = getFromBuffer(buff, bool, pos)
-      if isNil: 
+      if isNil:
         return nil
       else: result = T()
       for field in result[].fields:
