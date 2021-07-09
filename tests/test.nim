@@ -5,9 +5,9 @@ import awbject
 #Needs to be exported after anything that implements nimscripted procs
 import nimscripter
 import nimscripter/macros
+const mulProc = implNimscriptModule(multiply)
 suite "nimscripter":
   test "Multiply By 10":
-    const mulProc = implNimscriptModule(multiply)
     let intr = loadScript("tests/dothing.nims", mulProc)
     var buff = ""
     10.addToBuffer(buff)
@@ -18,7 +18,7 @@ suite "nimscripter":
     buff = ""
     1000.addToBuffer(buff)
     check 10000 == intr.get.invoke("doThing", buff, int)
-#[
+
   test "Get Seq Objects":
     let
       intr = loadScript("tests/getawbjects.nims")
@@ -31,7 +31,7 @@ suite "nimscripter":
 
   test "Non File Script":
     let script = """proc doThing(a: int): int {.exportToNim.} = result = a.multiplyBy10"""
-    let intr = loadScript(script, false)
+    let intr = loadScript(script, mulProc, false)
     var buff = ""
     10.addToBuffer(buff)
     check 100 == intr.get.invoke("doThing", buff, int)
@@ -63,4 +63,3 @@ proc getSomeRef: SomeRef {.exportToNim.} = SomeRef(a: 100)
       a: int
     let intr = loadScript(script, false)
     assert intr.get.invoke("getSomeRef", T = SomeRef).a == 100
-]#

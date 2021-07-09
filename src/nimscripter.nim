@@ -187,7 +187,7 @@ proc loadScript*(
     intr.implementInteropRoutines(scriptName)
 
     for uProc in userProcs:
-      intr.implementRoutine("*", scriptName, uProc.realName, uProc.vmProc)
+      intr.implementRoutine("*", scriptName, uProc.vmStringName, uProc.vmProc)
 
     when defined(debugScript): writeFile("debugScript.nims", additions & script)
 
