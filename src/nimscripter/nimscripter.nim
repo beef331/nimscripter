@@ -197,9 +197,7 @@ proc loadScript*(script: string, isFile: bool = true, modules: varargs[string],
     when defined(debugScript):
       echo "File not found"
 
-proc invoke*(intr: Interpreter, procName: string, argBuffer: string = "", T: typeDesc = void): T =
-  let
-    foreignProc = intr.selectRoutine(procName & "Exported")
+proc invoke*(intr: Interpreter, foreignProc: PSym, argBuffer: string = "", T: typeDesc = void): T =
   var ret: PNode
   if argBuffer.len > 0:
     ret = intr.callRoutine(foreignProc, [newStrNode(nkStrLit, argBuffer)])
@@ -208,3 +206,11 @@ proc invoke*(intr: Interpreter, procName: string, argBuffer: string = "", T: typ
   when T isnot void:
     var pos: BiggestInt
     getFromBuffer(ret.strVal, T, pos)
+
+proc selectRoutine*(intr: Interpreter, procName: string): PSym {.inline.} =
+  result = nimeval.selectRoutine(intr, procName & "Exported")
+
+proc invoke*(intr: Interpreter, procName: string, argBuffer: string = "", T: typeDesc = void): T {.inline.} =
+  let
+    foreignProc = nimscripter.selectRoutine(intr, procName)
+  result = invoke(intr, foreignProc, argBuffer, T)
