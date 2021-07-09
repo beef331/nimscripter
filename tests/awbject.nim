@@ -1,6 +1,4 @@
-import nimscripter/nimscripted
-exportCode:
-  type Awbject* = object
-    a*: int
-    b*: seq[float32]
-    name*: string
+type Awbject* = object
+  a*: int
+  b*: seq[float32]
+  name*: string

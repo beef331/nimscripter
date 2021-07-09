@@ -73,22 +73,22 @@ proc getFromBuffer*[T](buff: string, pos: var BiggestInt): T =
   if(pos > buff.len): echo "Buffer smaller than datatype requested"
   when T is object or T is tuple or T is ref object:
     when T is ref object:
-      let isNil = getFromBuffer(buff, bool, pos)
+      let isNil = getFromBuffer[bool](buff, pos)
       if isNil:
         return nil
       else: result = T()
       for field in result[].fields:
-        field = getFromBuffer(buff, field.typeof, pos)
+        field = getFromBuffer[field.typeof](buff, pos)
     else:
       for field in result.fields:
-        field = getFromBuffer(buff, field.typeof, pos)
+        field = getFromBuffer[field.typeof](buff, pos)
   elif T is seq:
-    result.setLen(getFromBuffer(buff, int, pos))
+    result.setLen(getFromBuffer[int](buff, pos))
     for x in result.mitems:
-      x = getFromBuffer(buff, typeof(x), pos)
+      x = getFromBuffer[typeof(x)](buff, pos)
   elif T is array:
     for x in result.mitems:
-      x = getFromBuffer(buff, typeof(x), pos)
+      x = getFromBuffer[typeof(x)](buff, pos)
   elif T is SomeFloat:
     result = getFloat(buff, pos).T
     pos += sizeof(BiggestInt)
@@ -96,6 +96,6 @@ proc getFromBuffer*[T](buff: string, pos: var BiggestInt): T =
     result = getInt(buff, pos).T
     pos += sizeof(BiggestInt)
   elif T is string:
-    let len = getFromBuffer(buff, BiggestInt, pos)
+    let len = getFromBuffer[BiggestInt](buff, pos)
     result = buff[pos..<(pos + len)]
     pos += len

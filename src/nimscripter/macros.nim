@@ -1,6 +1,8 @@
 import std/[macros, macrocache]
-import compiler/[nimeval, renderer, ast, types, llstream, vmdef, vm]
+import compiler/[renderer, ast, vmdef, vm]
 import marshalns, procsignature
+export VmProcSignature, marshalns
+
 const
   procedureCache = CacheTable"NimscriptProcedures"
   codeCache = CacheTable"NimscriptCode"
@@ -51,6 +53,7 @@ func getVmStringImpl(pDef: NimNode): string =
   if deSymd.params[0].kind != nnkEmpty: # Change the return type to string so can be picked up later
     deSymd.params[0] = ident("string")
 
+  deSymd[^1] = nnkDiscardStmt.newTree(newEmptyNode())
   deSymd[^2] = nnkDiscardStmt.newTree(newEmptyNode())
   result = deSymd.repr
 
@@ -59,13 +62,14 @@ func getVmRuntimeImpl(pDef: NimNode): string =
   ## This does the interop and where we want a serializer if we ever can.
   let
     deSymd = deSym(pDef.copyNimTree())
-    data = ident"data"
+    data = genSym(nskVar, "data")
     mangledProc = ident(getMangledName(pdef))
     hasParams = pDef.params.len > 1
     hasRetVal = pdef.params[0].kind != nnkEmpty
 
   if hasParams:
-    deSymd[^2] = quote do:
+    deSymd[^2] = newStmtList()
+    deSymd[^2].add quote do:
       var `data` = ""
     for def in pDef.params[1..^1]:
       for idnt in def[0..^3]: # Get data from buffer in the vm proc
@@ -74,13 +78,17 @@ func getVmRuntimeImpl(pDef: NimNode): string =
           addToBuffer(`idnt`, `data`)
 
   if hasRetVal:
-    let retT = pdef.params[0]
+    let
+      retT = pdef.params[0]
+      pos = genSym(nskVar, "pos")
     if hasParams: # Call the proc with "args"
       deSymd[^2].add quote do:
-        result = getFromBuffer[`retT`](`mangledProc`(`data`))
+        var `pos`: BiggestInt
+        result = getFromBuffer[`retT`](`mangledProc`(`data`), `pos`)
     else: # Just call the proc
       deSymd[^2].add quote do:
-        result = getFromBuffer[`retT`](`mangledProc`())
+        var `pos`: BiggestInt
+        result = getFromBuffer[`retT`](`mangledProc`(), `pos`)
   else:
     if hasParams: # Call proc with "Args"
       deSymd[^2].add quote do:
@@ -104,7 +112,7 @@ proc getLambda(pDef: NimNode): NimNode =
         quote do:
           proc n(`vmArgs`: VmArgs){.closure, gcsafe.} =
             var `pos`: BiggestInt = 0
-            let `args` = `vmArgs`.getString(0)
+            let `args` = getString(`vmArgs`, 0)
       else:
         quote do:
           proc n(`vmArgs`: VmArgs){.closure, gcsafe.} = discard
@@ -137,12 +145,19 @@ proc getLambda(pDef: NimNode): NimNode =
 
 macro implNimscriptModule*(moduleName: untyped): untyped =
   moduleName.expectKind(nnkIdent)
-  var
-    vmImpl: string
-    lambdas = nnkBracket.newNimNode()
+  result = nnkBracket.newNimNode()
   for p in procedureCache[$moduleName]:
-    vmImpl.add getVmStringImpl(p)
-    vmImpl.add getVmRuntimeImpl(p)
-    lambdas.add getLambda(p)
-  result = quote do:
-    (`vmImpl`, `lambdas`)
+    let
+      stringImpl = getVmStringImpl(p)
+      runImpl = getVmRuntimeImpl(p)
+      lambda = getLambda(p)
+      mangledName = getMangledName(p)
+      realName = $p[0]
+    result.add quote do:
+      VmProcSignature(
+        vmStringImpl: `stringImpl`,
+        vmStringName: `mangledName`,
+        vmRunImpl: `runImpl`,
+        realName: `realName`,
+        vmProc: `lambda`
+      )

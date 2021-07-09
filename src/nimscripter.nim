@@ -1,14 +1,11 @@
 import compiler / [nimeval, renderer, ast, types, llstream, vmdef, vm, lineinfos]
 import std/[os, json, options, sugar]
-import vmtable
-import nimscripted
 export destroyInterpreter, options, Interpreter
 
-import marshalns
+import nimscripter/[marshalns, procsignature]
 export marshalns
 
-const scriptAdditions = static:
-  var additions = block: """
+const scriptAdditions = """
 
 proc saveInt(a: BiggestInt): string = discard
 
@@ -51,26 +48,26 @@ proc addToBuffer*[T](a: T, buf: var string) =
     buf &= saveString(a)
 
 
-proc getFromBuffer*(buff: string, T: typedesc, pos: var BiggestInt): T=
+proc getFromBuffer*[T](buff: string, pos: var BiggestInt): T =
   if(pos > buff.len): echo "Buffer smaller than datatype requested"
   when T is object or T is tuple or T is ref object:
     when T is ref object:
-      let isNil = getFromBuffer(buff, bool, pos)
-      if isNil: 
+      let isNil = getFromBuffer[bool](buff, pos)
+      if isNil:
         return nil
       else: result = T()
       for field in result[].fields:
-        field = getFromBuffer(buff, field.typeof, pos)
+        field = getFromBuffer[field.typeof](buff, pos)
     else:
       for field in result.fields:
-        field = getFromBuffer(buff, field.typeof, pos)
+        field = getFromBuffer[field.typeof](buff, pos)
   elif T is seq:
-    result.setLen(getFromBuffer(buff, int, pos))
+    result.setLen(getFromBuffer[int](buff, pos))
     for x in result.mitems:
-      x = getFromBuffer(buff, typeof(x), pos)
+      x = getFromBuffer[typeof(x)](buff, pos)
   elif T is array:
     for x in result.mitems:
-      x = getFromBuffer(buff, typeof(x), pos)
+      x = getFromBuffer[typeof(x)](buff, pos)
   elif T is SomeFloat:
     result = getFloat(buff, pos).T
     pos += sizeof(BiggestInt)
@@ -78,7 +75,7 @@ proc getFromBuffer*(buff: string, T: typedesc, pos: var BiggestInt): T=
     result = getInt(buff, pos).T
     pos += sizeof(BiggestInt)
   elif T is string:
-    let len = getFromBuffer(buff, BiggestInt, pos)
+    let len = getFromBuffer[BiggestInt](buff, pos)
     result = buff[pos..<(pos + len)]
     pos += len
 
@@ -111,7 +108,7 @@ macro exportToNim(input: untyped): untyped=
     for param in identDefs[0..^3]:
       params.add param
       expBody.add quote do:
-        let `param` = getFromBuffer(`buffIdent`, `idType`, `posIdent`)
+        let `param` = getFromBuffer[`idType`](`buffIdent`, `posIdent`)
   let procName = if input[0].kind == nnkPostfix: input[0][0] else: input[0]
   if hasRetVal:
     expBody.add quote do:
@@ -124,18 +121,12 @@ macro exportToNim(input: untyped): untyped=
   exposed[^1] = expBody
   result = newStmtList(input, exposed)
 """
-  for types in vmtypeDefs:
-    additions &= types & "\n"
-  for vmProc in scriptTable:
-    additions &= vmProc.vmCompDefine
-    additions &= vmProc.vmRunDefine
-  additions
 
 type
   VMQuit* = object of CatchableError
     info*: TLineInfo
 
-proc implementRoutines(i: Interpreter, scriptName: string) =
+proc implementInteropRoutines(i: Interpreter, scriptName: string) =
   i.implementRoutine("*", scriptname, "saveInt", proc(vm: VmArgs) =
     let a = vm.getInt(0)
     vm.setResult(saveInt(a))
@@ -161,26 +152,43 @@ proc implementRoutines(i: Interpreter, scriptName: string) =
     vm.setResult(getFloat(buf, pos))
   )
 
-proc loadScript*(script: string, isFile: bool = true, modules: varargs[string],
-    stdPath: string = "./stdlib"): Option[Interpreter] =
+proc getSearchPath(path: string): seq[string] =
+  result.add path
+  for dir in walkDirRec(path, {pcDir}):
+    result.add dir
+
+proc loadScript*(
+  script: string,
+  userProcs: openArray[VmProcSignature],
+  isFile = true,
+  modules: varargs[string],
+  stdPath = "./stdlib"): Option[Interpreter] =
+
   if not isFile or fileExists(script):
     var additions = scriptAdditions
-    for `mod` in modules:
+
+    for `mod` in modules: # Add modules
       additions.insert("import " & `mod` & "\n", 0)
-    let
-      scriptName = if isFile: script.splitFile.name else: "script"
-    var searchPaths = collect(newSeq):
-        for dir in walkDirRec(stdPath, {pcDir}):
-          dir
-    searchPaths.insert stdPath, 0
-    if isFile:
+
+    for uProc in userProcs:
+      additions.add uProc.vmStringImpl
+      additions.add uProc.vmRunImpl
+
+    var searchPaths = getSearchPath(stdPath)
+    let scriptName = if isFile: script.splitFile.name else: "script"
+
+    if isFile: # If is file we want to enable relative imports
       searchPaths.add script.parentDir
+
     let
       intr = createInterpreter(scriptName, searchPaths)
       script = if isFile: readFile(script) else: script
-    intr.implementRoutines(scriptName)
-    for scriptProc in scriptTable:
-      intr.implementRoutine("*", scriptname, scriptProc.compName, scriptProc.vmProc)
+
+    intr.implementInteropRoutines(scriptName)
+
+    for uProc in userProcs:
+      intr.implementRoutine("*", scriptName, uProc.realName, uProc.vmProc)
+
     when defined(debugScript): writeFile("debugScript.nims", additions & script)
 
     #Throws Error so we can catch it
@@ -197,6 +205,14 @@ proc loadScript*(script: string, isFile: bool = true, modules: varargs[string],
     when defined(debugScript):
       echo "File not found"
 
+proc loadScript*(
+  script: string,
+  isFile = true,
+  modules: varargs[string],
+  stdPath = "./stdlib"): Option[Interpreter] {.inline.} =
+  loadScript(script, [], isFile, modules, stdPath)
+
+
 proc invoke*(intr: Interpreter, procName: string, argBuffer: string = "", T: typeDesc = void): T =
   let
     foreignProc = intr.selectRoutine(procName & "Exported")
@@ -207,4 +223,4 @@ proc invoke*(intr: Interpreter, procName: string, argBuffer: string = "", T: typ
     ret = intr.callRoutine(foreignProc, [])
   when T isnot void:
     var pos: BiggestInt
-    getFromBuffer(ret.strVal, T, pos)
+    getFromBuffer[T](ret.strVal, pos)

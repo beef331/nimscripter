@@ -3,10 +3,12 @@ import unittest
 import exportedprocs
 import awbject
 #Needs to be exported after anything that implements nimscripted procs
-import nimscripter/nimscripter
+import nimscripter
+import nimscripter/macros
 suite "nimscripter":
   test "Multiply By 10":
-    let intr = loadScript("tests/dothing.nims")
+    const mulProc = implNimscriptModule(multiply)
+    let intr = loadScript("tests/dothing.nims", mulProc)
     var buff = ""
     10.addToBuffer(buff)
     check 100 == intr.get.invoke("doThing", buff, int)
@@ -16,7 +18,7 @@ suite "nimscripter":
     buff = ""
     1000.addToBuffer(buff)
     check 10000 == intr.get.invoke("doThing", buff, int)
-
+#[
   test "Get Seq Objects":
     let
       intr = loadScript("tests/getawbjects.nims")
@@ -61,3 +63,4 @@ proc getSomeRef: SomeRef {.exportToNim.} = SomeRef(a: 100)
       a: int
     let intr = loadScript(script, false)
     assert intr.get.invoke("getSomeRef", T = SomeRef).a == 100
+]#

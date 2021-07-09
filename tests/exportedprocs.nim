@@ -1,2 +1,2 @@
-import nimscripter/nimscripted
-proc multiplyBy10(a: int): int {.exportToScript.}= a * 10
+import nimscripter/macros
+proc multiplyBy10(a: int): int {.exportToScript: multiply.} = a * 10
