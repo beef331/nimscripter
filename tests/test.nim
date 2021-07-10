@@ -1,10 +1,9 @@
 
 import unittest
-import exportedprocs
-import awbject
+import exportedprocs, awbject
 #Needs to be exported after anything that implements nimscripted procs
 import nimscripter
-import nimscripter/macros
+import nimscripter/expose
 const mulProc = implNimscriptModule(multiply)
 suite "nimscripter":
   test "Multiply By 10":

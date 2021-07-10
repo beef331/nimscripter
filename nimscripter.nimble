@@ -9,5 +9,5 @@ srcDir        = "src"
 
 # Dependencies
 # Due to umoving compiler/nim target this is smartest I think
-requires "nim >= 1.4.8"
-requires "compiler == 1.4.8"
+requires "nim >= 1.5.1"
+requires "compiler >= 1.5.1"

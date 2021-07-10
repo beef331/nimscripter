@@ -1,2 +1,2 @@
 switch("path", "$projectDir/../src")
-switch("define", "debugScript")
+switch("define", "scripted")
