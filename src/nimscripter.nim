@@ -1,5 +1,5 @@
-import compiler / [nimeval, renderer, ast, types, llstream, vmdef, vm, lineinfos]
-import std/[os, json, options, sugar]
+import compiler / [nimeval, renderer, ast, llstream, vmdef, vm, lineinfos]
+import std/[os, json, options,]
 export destroyInterpreter, options, Interpreter
 
 import nimscripter/[marshalns, procsignature]
@@ -166,7 +166,8 @@ proc loadScript*(
 
   if not isFile or fileExists(script):
     var additions = scriptAdditions
-
+    when defined(jsoninterop):
+      additions.add "import std/json \n"
     for `mod` in modules: # Add modules
       additions.insert("import " & `mod` & "\n", 0)
 
