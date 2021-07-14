@@ -143,4 +143,4 @@ proc parseNode(vmNode, typ: NimNode): NimNode =
   result = newBlockStmt(result)
 
 macro fromVm*[T: object](obj: typedesc[T], vmNode: PNode): untyped =
-  vmNode.parseNode(obj[0])
+  newStmtList(newCall(ident"privateAccess", obj[0]), vmNode.parseNode(obj[0]))

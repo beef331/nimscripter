@@ -1,6 +1,6 @@
 import compiler / [nimeval, renderer, ast, llstream, vmdef, vm, lineinfos]
-import std/[os, json, options,]
-export destroyInterpreter, options, Interpreter
+import std/[os, json, options, importutils]
+export destroyInterpreter, options, Interpreter, importutils
 
 import nimscripter/procsignature
 
