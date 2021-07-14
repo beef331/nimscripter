@@ -6,3 +6,5 @@ let a = ComplexObject(
   someOtherString: "Really cool?"
 )
 doStuff(a)
+doStuffA(SomeRef(a: 100))
+doStuffB(@[10, 20, 30, 10, 50, 100])

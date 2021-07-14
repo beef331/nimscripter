@@ -193,3 +193,13 @@ macro fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): untyped =
       `typ`(nil)
     else:
       `result`
+
+macro fromVm*[T: seq](obj: typedesc[T], vmNode: Pnode): untyped =
+  let
+    typ = obj[0]
+    elTyp = typ[^1]
+  quote do:
+    var res = newSeq[`elTyp`](`vmNode`.sons.len)
+    for i, x in `vmNode`.sons:
+      res[i] = fromVm(type(`elTyp`), x)
+    res
