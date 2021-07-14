@@ -123,58 +123,60 @@ proc fromVm*(t: typedesc[string], node: PNode): string =
   node.strVal
 
 proc parseObject(body, vmNode, typ: NimNode, fields: seq[NimNode], offset: var int, descrims: seq[NimNode]): NimNode =
+  ## Emits a constructor based off the type, works for variants and normal objects
   var
-    fields = fields
+    fields = fields # Copy since we're adding to this
     descrims = descrims
+
   var descrimInd = -1
   for i, x in body:
     case x.kind
     of nnkIdentDefs:
       let iTyp = x[^2]
       for obj in x[0..^3]:
-        let name = ident($obj.basename)
-        fields.add quote do:
+        let name = ident($obj.basename) # sanitize name
+        fields.add quote do: # Add the field parse to fields
           var `name` = fromVm(type(`iTyp`), `vmNode`[`offset`][1])
         inc offset
     of nnkRecCase:
+      assert descrimInd == -1, "Presently this only supports a single descrim per indent"
       descrimInd = i
     else: discard
 
   if descrimInd >= 0:
+    # This is a descriminat emit case stmt
     let
       recCase = body[descrimInd]
-      discrimName = recCase[0][0].basename
+      discrimName = recCase[0][0].basename # sanitize name
       discrimTyp = recCase[0][1]
-      parseDiscrim = quote do:
+      parseDiscrim = quote do: # Emit a "safe" descriminate
         let `discrimName` = fromVm(type(`discrimTyp`), `vmNode`[`offset`][1])
+
     inc offset
     descrims.add discrimName
     result = newStmtList(parseDiscrim, nnkCaseStmt.newTree(discrimName))
 
     for node in recCase[1..^1]:
       let node = node.copyNimTree
-      node[^1] = node[^1].parseObject(vmNode, typ, fields, offset, descrims)
-      result[^1].add node
+      node[^1] = node[^1].parseObject(vmNode, typ, fields, offset, descrims) # Replace typdef with construction
+      result[^1].add node # Add to case statement
   else:
     result = newStmtList(fields)
     let
       descrimExprs = collect(newSeq):
         for x in descrims:
           nnkExprColonExpr.newTree(x, x)
-      colExprs = collect(newSeq):
+      colExprs = collect(newSeq): # as these are stored as constructors get the name and then make `a: a`
         for x in fields:
           let name = x[0][0]
           nnkExprColonExpr.newTree(name, name)
-    result.add nnkObjConstr.newTree(typ)
+
+    result.add nnkObjConstr.newTree(typ) # Make the object
     result[^1].add descrimExprs
     result[^1].add colExprs
 
-
-proc parseNode(vmNode, typ: NimNode): NimNode =
-  let recList = typ.getImpl[^1][^1]
-  var offset = 1
-  result = newBlockStmt(parseObject(recList, vmNode, typ, @[], offset, @[]))
-  echo result.repr
-
 macro fromVm*[T: object](obj: typedesc[T], vmNode: PNode): untyped =
-  newStmtList(newCall(ident"privateAccess", obj[0]), vmNode.parseNode(obj[0]))
+  let recList = obj[0].getImpl[^1][^1]
+  var offset = 1
+  result = newBlockStmt(parseObject(recList, vmNode, obj[0], @[], offset, @[]))
+  result = newStmtList(newCall(ident"privateAccess", obj[0]), result)
