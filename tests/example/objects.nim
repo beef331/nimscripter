@@ -1,5 +1,12 @@
 type ComplexObject* = object
-  a*, b*: float
-  c: string
+  someInt*: int
+  case someBool*: bool
+  of true:
+    someString*: string
+    case secondaryBool*: bool
+    of true:
+      someOtherString*: string
+    else: discard
+  else:
+    someIntTwo*: int
 
-proc initComplexObject*: ComplexObject = ComplexObject(a: 30, b: 400, c: "Hello")

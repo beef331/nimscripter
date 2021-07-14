@@ -1,4 +1,4 @@
-import std/[macros, macrocache]
+import std/[macros, macrocache, sugar]
 import compiler/[renderer, ast, vmdef, vm]
 import procsignature
 export VmProcSignature
@@ -122,25 +122,59 @@ proc fromVm*(t: typedesc[string], node: PNode): string =
   assert node.kind == nkStrLit
   node.strVal
 
-
-proc parseNode(vmNode, typ: NimNode): NimNode =
-  let impl = typ.getImpl[^1][^1]
-  result = newStmtList()
-  var idents: seq[NimNode]
-  for x in impl:
-    if x.kind == nnkIdentDefs:
+proc parseObject(body, vmNode, typ: NimNode, fields: seq[NimNode], offset: var int, descrims: seq[NimNode]): NimNode =
+  var
+    fields = fields
+    descrims = descrims
+  var descrimInd = -1
+  for i, x in body:
+    case x.kind
+    of nnkIdentDefs:
       let iTyp = x[^2]
       for obj in x[0..^3]:
-        echo obj.treeRepr
-        let
-          name = obj.basename
-          offset = idents.len + 1
-        idents.add nnkExprColonExpr.newTree(name, name)
-        result.add quote do:
+        let name = ident($obj.basename)
+        fields.add quote do:
           var `name` = fromVm(type(`iTyp`), `vmNode`[`offset`][1])
-  result.add nnkObjConstr.newTree(typ)
-  result[^1].add idents
-  result = newBlockStmt(result)
+        inc offset
+    of nnkRecCase:
+      descrimInd = i
+    else: discard
+
+  if descrimInd >= 0:
+    let
+      recCase = body[descrimInd]
+      discrimName = recCase[0][0].basename
+      discrimTyp = recCase[0][1]
+      parseDiscrim = quote do:
+        let `discrimName` = fromVm(type(`discrimTyp`), `vmNode`[`offset`][1])
+    inc offset
+    descrims.add discrimName
+    result = newStmtList(parseDiscrim, nnkCaseStmt.newTree(discrimName))
+
+    for node in recCase[1..^1]:
+      let node = node.copyNimTree
+      node[^1] = node[^1].parseObject(vmNode, typ, fields, offset, descrims)
+      result[^1].add node
+  else:
+    result = newStmtList(fields)
+    let
+      descrimExprs = collect(newSeq):
+        for x in descrims:
+          nnkExprColonExpr.newTree(x, x)
+      colExprs = collect(newSeq):
+        for x in fields:
+          let name = x[0][0]
+          nnkExprColonExpr.newTree(name, name)
+    result.add nnkObjConstr.newTree(typ)
+    result[^1].add descrimExprs
+    result[^1].add colExprs
+
+
+proc parseNode(vmNode, typ: NimNode): NimNode =
+  let recList = typ.getImpl[^1][^1]
+  var offset = 1
+  result = newBlockStmt(parseObject(recList, vmNode, typ, @[], offset, @[]))
+  echo result.repr
 
 macro fromVm*[T: object](obj: typedesc[T], vmNode: PNode): untyped =
   newStmtList(newCall(ident"privateAccess", obj[0]), vmNode.parseNode(obj[0]))
