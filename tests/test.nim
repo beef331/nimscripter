@@ -9,13 +9,10 @@ suite "nimscripter":
   test "Multiply By 10":
     let intr = loadScript("tests/dothing.nims", mulProc)
     var buff = ""
-    10.addToBuffer(buff)
     check 100 == intr.get.invoke("doThing", buff, int)
     buff = ""
-    30.addToBuffer(buff)
     check 300 == intr.get.invoke("doThing", buff, int)
     buff = ""
-    1000.addToBuffer(buff)
     check 10000 == intr.get.invoke("doThing", buff, int)
 
   test "Get Seq Objects":
@@ -32,13 +29,10 @@ suite "nimscripter":
     let script = """proc doThing(a: int): int {.exportToNim.} = result = a.multiplyBy10"""
     let intr = loadScript(script, mulProc, false)
     var buff = ""
-    10.addToBuffer(buff)
     check 100 == intr.get.invoke("doThing", buff, int)
     buff = ""
-    30.addToBuffer(buff)
     check 300 == intr.get.invoke("doThing", buff, int)
     buff = ""
-    1000.addToBuffer(buff)
     check 10000 == intr.get.invoke("doThing", buff, int)
 
   test "Import flat standard modules":

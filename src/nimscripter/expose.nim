@@ -1,30 +1,9 @@
 import std/[macros, macrocache]
 import compiler/[renderer, ast, vmdef, vm]
-import marshalns, procsignature
-import private/common
-export VmProcSignature, marshalns
+import procsignature
+export VmProcSignature
 
-when defined(jsoninterop):
-  import private/jsoninterop
-  export json
-else:
-  import private/bininterop
-
-const
-  procedureCache = CacheTable"NimscriptProcedures"
-  codeCache = CacheTable"NimscriptCode"
-
-macro exportToScript*(moduleName: untyped, procedure: typed): untyped =
-  result = procedure
-  moduleName.expectKind(nnkIdent)
-  block add:
-    for name, _ in procedureCache:
-      if name == $moduleName:
-        procedureCache[name].add procedure
-        break add
-    procedureCache[$moduleName] = nnkStmtList.newTree(procedure)
-
-func deSym(n: NimNode): NimNode =
+func deSym*(n: NimNode): NimNode =
   # Remove all symbols
   result = n
   for x in 0 .. result.len - 1:
@@ -42,6 +21,59 @@ func getMangledName*(pDef: NimNode): string =
     if def[^2].kind in {nnkSym, nnkIdent}:
       result.add $def[^2]
   result.add "Comp"
+
+func getVmRuntimeImpl*(pDef: NimNode): string =
+  ## Returns the nimscript code that will convert to string and return the value.
+  ## This does the interop and where we want a serializer if we ever can.
+  let deSymd = deSym(pDef.copyNimTree())
+  deSymd[^1] = nnkDiscardStmt.newTree(newEmptyNode())
+
+  result = deSymd.repr
+
+
+proc getLambda*(pDef: NimNode): NimNode =
+  ## Generates the lambda for the vm backed logic.
+  ## This is what the vm calls internally when talking to Nim
+  let
+    vmArgs = ident"vmArgs"
+    args = ident"args"
+    pos = ident"pos"
+    tmp = quote do:
+      proc n(`vmArgs`: VmArgs){.closure, gcsafe.} = discard
+
+  tmp[^1] = newStmtList()
+
+  tmp[0] = newEmptyNode()
+  result = nnkLambda.newNimNode()
+  tmp.copyChildrenTo(result)
+
+  var procArgs: seq[NimNode]
+  for def in pDef.params[1..^1]:
+    let typ = def[^2]
+    for idnt in def[0..^3]: # Get data from buffer in the vm proc
+      let 
+        idnt = ident($idnt)
+        argNum = procArgs.len
+      procArgs.add idnt
+      result[^1].add quote do:
+        var `idnt` = fromVm(type(`typ`), getNode(`vmArgs`, `argNum`))
+  if pdef.params.len > 1:
+    result[^1].add newCall(pDef[0], procArgs)
+
+const
+  procedureCache = CacheTable"NimscriptProcedures"
+  codeCache = CacheTable"NimscriptCode"
+
+macro exportToScript*(moduleName: untyped, procedure: typed): untyped =
+  result = procedure
+  moduleName.expectKind(nnkIdent)
+  block add:
+    for name, _ in procedureCache:
+      if name == $moduleName:
+        procedureCache[name].add procedure
+        break add
+    procedureCache[$moduleName] = nnkStmtList.newTree(procedure)
+
 
 func getVmStringImpl(pDef: NimNode): string =
   ## Takes a proc and changes the name to be manged for the string backend
@@ -68,16 +100,47 @@ macro implNimscriptModule*(moduleName: untyped): untyped =
   result = nnkBracket.newNimNode()
   for p in procedureCache[$moduleName]:
     let
-      stringImpl = getVmStringImpl(p)
       runImpl = getVmRuntimeImpl(p)
       lambda = getLambda(p)
-      mangledName = getMangledName(p)
       realName = $p[0]
     result.add quote do:
       VmProcSignature(
-        vmStringImpl: `stringImpl`,
-        vmStringName: `mangledName`,
+        name: `realName`,
         vmRunImpl: `runImpl`,
-        realName: `realName`,
         vmProc: `lambda`
       )
+
+proc fromVm*(t: typedesc[SomeOrdinal], node: PNode): t =
+  assert node.kind in nkCharLit..nkUInt64Lit
+  return node.intVal.t
+
+proc fromVm*(t: typedesc[SomeFloat], node: PNode): t =
+  assert node.kind in nkFloatLit..nkFloat128Lit, $node.kind
+  node.floatVal.t
+
+proc fromVm*(t: typedesc[string], node: PNode): string =
+  assert node.kind == nkStrLit
+  node.strVal
+
+
+proc parseNode(vmNode, typ: NimNode): NimNode =
+  let impl = typ.getImpl[^1][^1]
+  result = newStmtList()
+  var idents: seq[NimNode]
+  for x in impl:
+    if x.kind == nnkIdentDefs:
+      let iTyp = x[^2]
+      for obj in x[0..^3]:
+        echo obj.treeRepr
+        let
+          name = obj.basename
+          offset = idents.len + 1
+        idents.add nnkExprColonExpr.newTree(name, name)
+        result.add quote do:
+          var `name` = fromVm(type(`iTyp`), `vmNode`[`offset`][1])
+  result.add nnkObjConstr.newTree(typ)
+  result[^1].add idents
+  result = newBlockStmt(result)
+
+macro fromVm*[T: object](obj: typedesc[T], vmNode: PNode): untyped =
+  vmNode.parseNode(obj[0])
