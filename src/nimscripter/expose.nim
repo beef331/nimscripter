@@ -180,3 +180,16 @@ macro fromVm*[T: object](obj: typedesc[T], vmNode: PNode): untyped =
   var offset = 1
   result = newBlockStmt(parseObject(recList, vmNode, obj[0], @[], offset, @[]))
   result = newStmtList(newCall(ident"privateAccess", obj[0]), result)
+
+macro fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): untyped =
+  let
+    recList = obj[0].getImpl[^1][^1][^1]
+    typ = obj[0]
+  var offset = 1
+  result = newBlockStmt(parseObject(recList, vmNode, typ, @[], offset, @[]))
+  result = newStmtList(newCall(ident"privateAccess", typ), result)
+  result = quote do:
+    if `vmNode`.kind == nkNilLit:
+      `typ`(nil)
+    else:
+      `result`
