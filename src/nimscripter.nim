@@ -1,6 +1,6 @@
-import compiler / [nimeval, renderer, ast, llstream, vmdef, vm, lineinfos]
+import compiler / [nimeval, renderer, ast, llstream, vmdef, vm, lineinfos, idents]
 import std/[os, json, options, importutils]
-export destroyInterpreter, options, Interpreter, importutils
+export destroyInterpreter, options, Interpreter, importutils, ast, lineinfos, idents
 
 import nimscripter/procsignature
 
@@ -54,13 +54,8 @@ proc loadScript*(
   loadScript(script, [], isFile, modules, stdPath)
 
 
-proc invoke*(intr: Interpreter, procName: string, argBuffer: string = "", T: typeDesc = void): T =
+proc invoke*[A](intr: Interpreter, procName: string, arg: A, T: typeDesc = void): T =
   let
-    foreignProc = intr.selectRoutine(procName & "Exported")
+    foreignProc = intr.selectRoutine(procName)
   var ret: PNode
-  if argBuffer.len > 0:
-    ret = intr.callRoutine(foreignProc, [newStrNode(nkStrLit, argBuffer)])
-  else:
-    ret = intr.callRoutine(foreignProc, [])
-  when T isnot void:
-    var pos: BiggestInt
+  ret = intr.callRoutine(foreignProc, [arg.toVm])

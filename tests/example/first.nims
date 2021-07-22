@@ -8,3 +8,5 @@ let a = ComplexObject(
 doStuff(a)
 doStuffA(SomeRef(a: 100))
 doStuffB(@[10, 20, 30, 10, 50, 100])
+
+proc echoObj*(c: ComplexObject) = echo c

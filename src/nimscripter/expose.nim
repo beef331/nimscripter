@@ -1,5 +1,5 @@
 import std/[macros, macrocache, sugar]
-import compiler/[renderer, ast, vmdef, vm]
+import compiler/[renderer, ast, vmdef, vm, ast]
 import procsignature
 export VmProcSignature
 
@@ -74,27 +74,6 @@ macro exportToScript*(moduleName: untyped, procedure: typed): untyped =
         break add
     procedureCache[$moduleName] = nnkStmtList.newTree(procedure)
 
-
-func getVmStringImpl(pDef: NimNode): string =
-  ## Takes a proc and changes the name to be manged for the string backend
-  ## parameters are replaced with a single string, return value aswell.
-  ## Hidden backed procedure for the Nim interop
-  let deSymd = deSym(pdef.copyNimTree())
-  deSymd[0] = ident(getMangledName(pDef))
-
-  if deSymd.params.len > 2: # Delete all params but first/return type
-    deSymd.params.del(2, deSymd[3].len - 2)
-
-  if deSymd.params.len > 1: # Changes the first parameter to string named `parameters`
-    deSymd.params[1] = newIdentDefs(ident("parameters"), ident("string"))
-
-  if deSymd.params[0].kind != nnkEmpty: # Change the return type to string so can be picked up later
-    deSymd.params[0] = ident("string")
-
-  deSymd[^1] = nnkDiscardStmt.newTree(newEmptyNode())
-  deSymd[^2] = nnkDiscardStmt.newTree(newEmptyNode())
-  result = deSymd.repr
-
 macro implNimscriptModule*(moduleName: untyped): untyped =
   moduleName.expectKind(nnkIdent)
   result = nnkBracket.newNimNode()
@@ -115,7 +94,7 @@ proc fromVm*(t: typedesc[SomeOrdinal], node: PNode): t =
   return node.intVal.t
 
 proc fromVm*(t: typedesc[SomeFloat], node: PNode): t =
-  assert node.kind in nkFloatLit..nkFloat128Lit, $node.kind
+  assert node.kind in nkFloatLit..nkFloat128Lit
   node.floatVal.t
 
 proc fromVm*(t: typedesc[string], node: PNode): string =
@@ -175,6 +154,56 @@ proc parseObject(body, vmNode, typ: NimNode, fields: seq[NimNode], offset: var i
     result[^1].add descrimExprs
     result[^1].add colExprs
 
+proc toPnode(body, obj, vmNode: NimNode, fields: seq[NimNode], offset: var int, descrims: seq[NimNode]): NimNode =
+  ## Emits a constructor based off the type, works for variants and normal objects
+  var
+    fields = fields # Copy since we're adding to this
+    descrims = descrims
+
+  var descrimInd = -1
+  for i, x in body:
+    case x.kind
+    of nnkIdentDefs:
+      for field in x[0..^3]:
+        let strField = newLit($field)
+        fields.add quote do: # Add the field parse to fields
+          let
+            n = newNode(nkExprColonExpr)
+            ident = PIdent(s: `strField`)
+          n.add newIdentNode(ident, unknownLineInfo)
+          n.add `obj`.`field`.toVm
+          `vmNode`.add n
+        inc offset
+    of nnkRecCase:
+      assert descrimInd == -1, "Presently this only supports a single descrim per indent"
+      descrimInd = i
+    else: discard
+
+  if descrimInd >= 0:
+    # This is a descriminat emit case stmt
+    let
+      recCase = body[descrimInd]
+      discrim = recCase[0][0]
+      name = $discrim
+      descrimConv = quote do: # Emit a conversion for the descrim
+        let
+          n = newNode(nkExprColonExpr)
+          ident = PIdent(s: `name`)
+        n.add newIdentNode(ident, unknownLineInfo)
+        n.add `obj`.`discrim`.toVm
+        `vmNode`.add n
+
+    inc offset
+    descrims.add descrimConv
+    result = newStmtList(nnkCaseStmt.newTree(newDotExpr(obj, discrim)))
+    for node in recCase[1..^1]:
+      let node = node.copyNimTree
+      node[^1] = node[^1].toPnode(obj, vmNode, fields, offset, descrims) # Replace typdef with conversion
+      result[^1].add node # Add to case statement
+  else:
+    result = newStmtList(descrims)
+    result.add fields
+
 macro fromVm*[T: object](obj: typedesc[T], vmNode: PNode): untyped =
   let recList = obj[0].getImpl[^1][^1]
   var offset = 1
@@ -203,3 +232,39 @@ macro fromVm*[T: seq](obj: typedesc[T], vmNode: Pnode): untyped =
     for i, x in `vmNode`.sons:
       res[i] = fromVm(type(`elTyp`), x)
     res
+
+proc toVm*[T: enum](a: T): Pnode = newIntNode(nkIntLit, a.ord.BiggestInt)
+proc toVm*[T: bool](a: T): Pnode = newIntNode(nkIntLit, a.ord.BiggestInt)
+proc toVm*[T: char](a: T): Pnode = newIntNode(nkUInt8Lit, a.ord.BiggestInt)
+
+proc toVm*[T: int8](a: T): Pnode = newIntNode(nkInt8Lit, a)
+proc toVm*[T: int16](a: T): Pnode = newIntNode(nkInt16Lit, a)
+proc toVm*[T: int32](a: T): Pnode = newIntNode(nkInt32Lit, a)
+proc toVm*[T: int64](a: T): Pnode = newIntNode(nkint64Lit, a)
+proc toVm*[T: int](a: T): Pnode = newIntNode(nkIntLit, a)
+
+proc toVm*[T: uint8](a: T): Pnode = newIntNode(nkuInt8Lit, a)
+proc toVm*[T: uint16](a: T): Pnode = newIntNode(nkuInt16Lit, a)
+proc toVm*[T: uint32](a: T): Pnode = newIntNode(nkuInt32Lit, a)
+proc toVm*[T: uint64](a: T): Pnode = newIntNode(nkuint64Lit, a)
+proc toVm*[T: uint](a: T): Pnode = newIntNode(nkuIntLit, a)
+
+proc toVm*[T: float32](a: T): Pnode = newFloatNode(nkFloat32Lit, a)
+proc toVm*[T: float64](a: T): Pnode = newFloatNode(nkFloat64Lit, a)
+
+proc toVm*[T: string](a: T): PNode = newStrNode(nkStrLit, a)
+
+
+macro toVM*[T: object](obj: T): PNode =
+  let
+    pnode = genSym(nskVar, "node")
+    recList = obj.getTypeImpl[^1]
+  result = newStmtList()
+  result.add quote do:
+    var `pnode` = newNode(nkObjConstr)
+  var offset = 0
+  result.add toPnode(recList, obj, pnode, @[], offset, @[])
+  result.add pnode
+  result = newBlockStmt(result)
+  echo result.repr
+
