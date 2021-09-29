@@ -1,5 +1,6 @@
 import compiler / [nimeval, renderer, ast, llstream, vmdef, vm, lineinfos, idents]
-import std/[os, json, options, importutils]
+import std/[os, json, options, importutils, strutils]
+import nimscripter/expose
 export destroyInterpreter, options, Interpreter, importutils, ast, lineinfos, idents
 
 import nimscripter/procsignature
@@ -7,6 +8,7 @@ import nimscripter/procsignature
 type
   VMQuit* = object of CatchableError
     info*: TLineInfo
+  VmProcNotFound* = object of CatchableError
 
 proc getSearchPath(path: string): seq[string] =
   result.add path
@@ -55,7 +57,15 @@ proc loadScript*(
 
 
 proc invoke*[A](intr: Interpreter, procName: string, arg: A, T: typeDesc = void): T =
-  let
-    foreignProc = intr.selectRoutine(procName)
+  let foreignProc = intr.selectRoutine(procName)
   var ret: PNode
   ret = intr.callRoutine(foreignProc, [arg.toVm])
+
+proc invoke*(intr: Interpreter, procName: string, T: typeDesc = void): T =
+  let foreignProc = intr.selectRoutine(procName)
+  if foreignProc != nil:
+    var ret: PNode
+    ret = intr.callRoutine(foreignProc, [])
+    result = fromVm(T, ret)
+  else:
+    raise newException(VmProcNotFound, "'$#' was not found in the script." % procName)

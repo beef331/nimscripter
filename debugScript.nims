@@ -72,8 +72,8 @@ proc getFromBuffer*[T](buff: string, pos: var BiggestInt): T =
     pos += len
 
 import macros
-macro exportToNim(input: untyped): untyped=
-  let 
+macro exportToNim(input: untyped): untyped =
+  let
     exposed = copy(input)
     hasRetVal = input[3][0].kind != nnkEmpty
   if exposed[0].kind == nnkPostfix:
@@ -87,7 +87,7 @@ macro exportToNim(input: untyped): untyped=
     exposed[3].del(2, exposed[3].len - 2)
   if exposed[3].len > 1:
     exposed[3][1] = newIdentDefs(ident("parameters"), ident("string"))
-  
+
   let
     buffIdent = ident("parameters")
     posIdent = ident("pos")
