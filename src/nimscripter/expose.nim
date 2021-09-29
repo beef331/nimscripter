@@ -1,4 +1,4 @@
-import std/[macros, macrocache, sugar]
+import std/[macros, macrocache, sugar, typetraits]
 import compiler/[renderer, ast, vmdef, vm, ast]
 import procsignature
 export VmProcSignature
@@ -27,6 +27,7 @@ func getVmRuntimeImpl*(pDef: NimNode): string =
   ## This does the interop and where we want a serializer if we ever can.
   let deSymd = deSym(pDef.copyNimTree())
   deSymd[^1] = nnkDiscardStmt.newTree(newEmptyNode())
+  deSymd.repr
 
 
 proc getLambda*(pDef: NimNode): NimNode =
@@ -54,7 +55,7 @@ proc getLambda*(pDef: NimNode): NimNode =
         argNum = procArgs.len
       procArgs.add idnt
       result[^1].add quote do:
-        var `idnt` = fromVm(type(`typ`), getNode(`vmArgs`, `argNum`))
+        var `idnt` = fromVm(typeof(`typ`), getNode(`vmArgs`, `argNum`))
   if pdef.params.len > 1:
     result[^1].add newCall(pDef[0], procArgs)
 
@@ -85,6 +86,10 @@ macro implNimscriptModule*(moduleName: untyped): untyped =
         vmProc: `lambda`
       )
 
+proc extractType(typ: NimNode): NimNode =
+  let impl = typ.getTypeInst
+  impl[^1]
+
 proc fromVm*(t: typedesc[SomeOrdinal], node: PNode): t =
   assert node.kind in nkCharLit..nkUInt64Lit
   return node.intVal.t
@@ -97,15 +102,52 @@ proc fromVm*(t: typedesc[string], node: PNode): string =
   assert node.kind == nkStrLit
   node.strVal
 
+proc fromVm*[T: object](obj: typedesc[T], vmNode: PNode): T
+proc fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): T
+
+
+macro fromVmImpl[T: seq](obj: typedesc[T], vmNode: Pnode): untyped =
+  let typ = newCall(ident"typeof"):
+    let extr = extractType(obj)
+    if extr[0].eqIdent"seq":
+      extr[^1]
+    else:
+      extr
+  result = quote do:
+    var res = newSeq[`typ`](`vmNode`.sons.len)
+    for i, x in `vmNode`.sons:
+      res[i] = fromVm(`typ`, x)
+    res
+  echo result.repr
+proc fromVm*[Y; T: seq[Y]](obj: typedesc[T], vmNode: Pnode): seq[Y] = fromVmImpl(obj, vmnode)
+
+
 proc hasRecCase(n: NimNode): bool =
   for son in n:
     if son.kind == nnkRecCase:
       return true
 
+proc addFields(n: NimNode, fields: var seq[NimNode]) =
+  case n.kind
+  of nnkRecCase:
+    fields.add n[0][0].basename
+  of nnkIdentDefs:
+    for def in n[0..^3]:
+      fields.add def.basename
+  else:
+    discard
+
 proc parseObject(body, vmNode, baseType: NimNode, offset: var int, fields: var seq[
     NimNode]): NimNode =
   ## Emits a constructor based off the type, works for variants and normal objects
-  result = newStmtList()
+
+  template stmtlistAdd(body: NimNode) =
+    if result.kind == nnkNilLit:
+      result = body
+    elif result.kind != nnkStmtList:
+      result = newStmtList(result, body)
+    else:
+      result.add body
 
   template addConstr(n: NimNode) =
     if not n.hasRecCase:
@@ -115,56 +157,57 @@ proc parseObject(body, vmNode, baseType: NimNode, offset: var int, fields: var s
           nnkExprColonExpr.newTree(desymd, desymd)
       if result.kind == nnkNilLit:
         result = newStmtList()
-      result.add nnkObjConstr.newTree(baseType)
-      result[^1].add colons
+      let constr = nnkObjConstr.newTree(baseType)
+      constr.add colons
+      stmtlistAdd(constr)
 
   case body.kind
   of nnkRecList:
     for defs in body:
-      result.add parseObject(defs, vmNode, baseType, offset, fields)
-    addConstr(body)
+      defs.addFields(fields)
+    for defs in body:
+      stmtlistAdd parseObject(defs, vmNode, baseType, offset, fields)
+    if body[0].kind notin {nnkNilLit, nnkDiscardStmt}:
+      addConstr(body)
   of nnkIdentDefs:
     let typ = body[^2]
     for def in body[0..^3]:
       let name = def.basename
-      result.add quote do:
+      stmtlistAdd quote do:
         let `name` = fromVm(typeof(`typ`), `vmNode`[`offset`][1])
       inc offset
   of nnkRecCase:
     let
       descrimName = body[0][0].basename
       typ = body[0][1]
-    result.add quote do:
+    stmtlistAdd quote do:
       let `descrimName` = fromVm(typeof(`typ`), `vmNode`[`offset`][1])
     inc offset
     let caseStmt = nnkCaseStmt.newTree(descrimName)
-    fields.add descrimName
     let preFieldSize = fields.len
     for subDefs in body[1..^1]:
       caseStmt.add parseObject(subDefs, vmNode, baseType, offset, fields)
-    result.add caseStmt
+    stmtlistAdd caseStmt
     fields.setLen(preFieldSize)
   of nnkOfBranch, nnkElifBranch:
     let
       conditions = body[0]
       preFieldSize = fields.len
       ofBody = parseObject(body[1], vmNode, baseType, offset, fields)
-    result.add body.kind.newTree(conditions, ofBody)
-    addConstr(body[1])
+    stmtlistAdd body.kind.newTree(conditions, ofBody)
     fields.setLen(preFieldSize)
   of nnkElse:
     let preFieldSize = fields.len
-    result.add nnkElse.newTree(parseObject(body[0], vmNode, baseType, offset, fields))
+    stmtlistAdd nnkElse.newTree(parseObject(body[0], vmNode, baseType, offset, fields))
     fields.setLen(preFieldSize)
   of nnkNilLit, nnkDiscardStmt:
     result = newStmtList()
-    addConstr(body)
+    addConstr(result)
   else: discard
 
 proc parseObject(body, vmNode, baseType: NimNode, offset: var int): NimNode =
   var fields: seq[NimNode]
   result = parseObject(body, vmNode, baseType, offset, fields)
-  echo result.repr
 
 proc toPnode(body, obj, vmNode: NimNode, fields: seq[NimNode], offset: var int, descrims: seq[
     NimNode]): NimNode =
@@ -217,18 +260,37 @@ proc toPnode(body, obj, vmNode: NimNode, fields: seq[NimNode], offset: var int, 
     result = newStmtList(descrims)
     result.add fields
 
-proc extractType(typ: NimNode): NimNode =
-  let impl = typ.getTypeInst
-  impl[^1]
+proc replaceGenerics(n: NimNode, genTyp: seq[(NimNode, NimNode)]) =
+  for i in 0 ..< n.len:
+    var x = n[i]
+    if x.kind == nnkSym:
+      for (name, typ) in genTyp:
+        if x.eqIdent(name):
+          n[i] = typ
+    else:
+      replaceGenerics(x, genTyp)
 
-macro fromVm*[T: object](obj: typedesc[T], vmNode: PNode): untyped =
-  let recList = obj[0].getImpl[^1][^1]
+macro fromVmImpl[T: object](obj: typedesc[T], vmNode: PNode): untyped =
+  let
+    typ = newCall(ident"typeof", obj)
+    recList = block:
+      let extracted = obj.extractType
+      if extracted.len > 0:
+        let
+          impl = extracted[0].getImpl
+          recList = extracted[0].getImpl[^1][^1].copyNimTree
+          genParams = collect(newSeq):
+            for i, x in impl[1]:
+              (x, extracted[i + 1])
+        recList.replaceGenerics(genParams)
+        recList
+      else:
+        extracted.getImpl[^1][^1]
   var offset = 1
-  let parsed = parseObject(recList, vmNode, obj[0], offset)
-  result = newBlockStmt(parseObject(recList, vmNode, obj[0], offset))
-  result = newStmtList(newCall(ident"privateAccess", obj[0]), result)
+  result = newBlockStmt(parseObject(recList, vmNode, typ, offset))
+  result[1].insert 0, newCall(ident"privateAccess", typ)
 
-macro fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): untyped =
+macro fromVmImpl[T: ref object](obj: typedesc[T], vmNode: PNode): untyped =
   let
     obj = extractType(obj)
   let
@@ -237,25 +299,17 @@ macro fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): untyped =
         obj.getImpl[^1][0].getImpl[^1][^1]
       else:
         obj.getImpl[^1][0][^1]
-    typ = obj
   var offset = 1
   result = newBlockStmt(parseObject(recList, vmNode, obj, offset))
-  result = newStmtList(newCall(ident"privateAccess", newCall("typeof", typ)), result)
+  result[1].insert 0, newCall(ident"privateAccess", newCall("typeof", obj))
   result = quote do:
     if `vmNode`.kind == nkNilLit:
-      `typ`(nil)
+      `obj`(nil)
     else:
       `result`
 
-macro fromVm*[T: seq](obj: typedesc[T], vmNode: Pnode): untyped =
-  let
-    typ = obj[0]
-    elTyp = typ[^1]
-  quote do:
-    var res = newSeq[`elTyp`](`vmNode`.sons.len)
-    for i, x in `vmNode`.sons:
-      res[i] = fromVm(type(`elTyp`), x)
-    res
+proc fromVm*[T: object](obj: typedesc[T], vmNode: PNode): T = fromVmImpl(obj, vmnode)
+proc fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): T = fromVmImpl(obj, vmnode)
 
 proc toVm*[T: enum](a: T): Pnode = newIntNode(nkIntLit, a.ord.BiggestInt)
 proc toVm*[T: bool](a: T): Pnode = newIntNode(nkIntLit, a.ord.BiggestInt)
