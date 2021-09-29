@@ -28,8 +28,6 @@ func getVmRuntimeImpl*(pDef: NimNode): string =
   let deSymd = deSym(pDef.copyNimTree())
   deSymd[^1] = nnkDiscardStmt.newTree(newEmptyNode())
 
-  result = deSymd.repr
-
 
 proc getLambda*(pDef: NimNode): NimNode =
   ## Generates the lambda for the vm backed logic.
@@ -99,35 +97,73 @@ proc fromVm*(t: typedesc[string], node: PNode): string =
   assert node.kind == nkStrLit
   node.strVal
 
-proc parseObject(body, vmNode, typ: NimNode, offset: var int): NimNode =
+proc hasRecCase(n: NimNode): bool =
+  for son in n:
+    if son.kind == nnkRecCase:
+      return true
+
+proc parseObject(body, vmNode, baseType: NimNode, offset: var int, fields: var seq[
+    NimNode]): NimNode =
   ## Emits a constructor based off the type, works for variants and normal objects
   result = newStmtList()
-  for defs in body:
-    case defs.kind
-    of nnkIdentDefs:
-      for def in defs[1..^3]:
-        let
-          name = def.basename
-          typ = defs[^2]
-        result.add quote do:
-          let `name` = fromVm(`typ`, `vmNode`.getNode(`offset`))
-        inc offset
-    of nnkRecCase:
-      let
-        descrimName = defs[0][0].basename
-        typ = defs[0][1]
-      result.add quote do:
-        let `descrimName` = fromVm(`typ`, `vmNode`.getNode(`offset`))
-      inc offset
-    of nnkOfBranch, nnkElifBranch:
-      let
-        conditions = defs[0]
-        ofBody = parseObject(defs[1], vmNode, typ, offset)
-      result.add defs.kind.newTree(conditions, ofBody)
-    of nnkElse:
-      result.add nnkElse.newTree(parseObject(defs[0], vmNode, typ, offset))
-    else: discard
 
+  template addConstr(n: NimNode) =
+    if not n.hasRecCase:
+      let colons = collect(newSeq):
+        for x in fields:
+          let desymd = ident($x)
+          nnkExprColonExpr.newTree(desymd, desymd)
+      if result.kind == nnkNilLit:
+        result = newStmtList()
+      result.add nnkObjConstr.newTree(baseType)
+      result[^1].add colons
+
+  case body.kind
+  of nnkRecList:
+    for defs in body:
+      result.add parseObject(defs, vmNode, baseType, offset, fields)
+    addConstr(body)
+  of nnkIdentDefs:
+    let typ = body[^2]
+    for def in body[0..^3]:
+      let name = def.basename
+      result.add quote do:
+        let `name` = fromVm(typeof(`typ`), `vmNode`[`offset`][1])
+      inc offset
+  of nnkRecCase:
+    let
+      descrimName = body[0][0].basename
+      typ = body[0][1]
+    result.add quote do:
+      let `descrimName` = fromVm(typeof(`typ`), `vmNode`[`offset`][1])
+    inc offset
+    let caseStmt = nnkCaseStmt.newTree(descrimName)
+    fields.add descrimName
+    let preFieldSize = fields.len
+    for subDefs in body[1..^1]:
+      caseStmt.add parseObject(subDefs, vmNode, baseType, offset, fields)
+    result.add caseStmt
+    fields.setLen(preFieldSize)
+  of nnkOfBranch, nnkElifBranch:
+    let
+      conditions = body[0]
+      preFieldSize = fields.len
+      ofBody = parseObject(body[1], vmNode, baseType, offset, fields)
+    result.add body.kind.newTree(conditions, ofBody)
+    addConstr(body[1])
+    fields.setLen(preFieldSize)
+  of nnkElse:
+    let preFieldSize = fields.len
+    result.add nnkElse.newTree(parseObject(body[0], vmNode, baseType, offset, fields))
+    fields.setLen(preFieldSize)
+  of nnkNilLit, nnkDiscardStmt:
+    result = newStmtList()
+    addConstr(body)
+  else: discard
+
+proc parseObject(body, vmNode, baseType: NimNode, offset: var int): NimNode =
+  var fields: seq[NimNode]
+  result = parseObject(body, vmNode, baseType, offset, fields)
   echo result.repr
 
 proc toPnode(body, obj, vmNode: NimNode, fields: seq[NimNode], offset: var int, descrims: seq[
@@ -188,6 +224,7 @@ proc extractType(typ: NimNode): NimNode =
 macro fromVm*[T: object](obj: typedesc[T], vmNode: PNode): untyped =
   let recList = obj[0].getImpl[^1][^1]
   var offset = 1
+  let parsed = parseObject(recList, vmNode, obj[0], offset)
   result = newBlockStmt(parseObject(recList, vmNode, obj[0], offset))
   result = newStmtList(newCall(ident"privateAccess", obj[0]), result)
 
@@ -197,19 +234,18 @@ macro fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): untyped =
   let
     recList =
       if obj.getImpl[^1][0].kind == nnkSym:
-        obj.getImpl[^1][0].getImpl
+        obj.getImpl[^1][0].getImpl[^1][^1]
       else:
         obj.getImpl[^1][0][^1]
     typ = obj
   var offset = 1
-  result = newBlockStmt(parseObject(recList, vmNode, typ, offset))
+  result = newBlockStmt(parseObject(recList, vmNode, obj, offset))
   result = newStmtList(newCall(ident"privateAccess", newCall("typeof", typ)), result)
   result = quote do:
     if `vmNode`.kind == nkNilLit:
       `typ`(nil)
     else:
       `result`
-  echo result.repr
 
 macro fromVm*[T: seq](obj: typedesc[T], vmNode: Pnode): untyped =
   let
@@ -254,5 +290,4 @@ macro toVM*[T: object](obj: T): PNode =
   result.add toPnode(recList, obj, pnode, @[], offset, @[])
   result.add pnode
   result = newBlockStmt(result)
-  echo result.repr
 
