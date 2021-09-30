@@ -1,4 +1,4 @@
-import std/[macros, macrocache, sugar, typetraits]
+import std/[macros, macrocache, sugar, typetraits, importutils]
 import compiler/[renderer, ast, vmdef, vm, ast]
 import procsignature
 export VmProcSignature
@@ -91,34 +91,36 @@ proc extractType(typ: NimNode): NimNode =
   impl[^1]
 
 proc fromVm*(t: typedesc[SomeOrdinal], node: PNode): t =
-  assert node.kind in nkCharLit..nkUInt64Lit
-  return node.intVal.t
+  if node.kind == nkExprColonExpr:
+    t(node[1].intVal)
+  else:
+    t(node.intVal)
 
 proc fromVm*(t: typedesc[SomeFloat], node: PNode): t =
-  assert node.kind in nkFloatLit..nkFloat128Lit
-  node.floatVal.t
+  if node.kind == nkExprColonExpr:
+    t(node[1].floatVal)
+  else:
+    t(node.floatVal)
 
 proc fromVm*(t: typedesc[string], node: PNode): string =
-  assert node.kind == nkStrLit
-  node.strVal
+  if node.kind == nkExprColonExpr:
+    node[1].strVal
+  else:
+    node.strVal
 
-proc fromVm*[T: object](obj: typedesc[T], vmNode: PNode): T
+proc fromVm*[T: object or tuple](obj: typedesc[T], vmNode: PNode): T
 proc fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): T
 
 
 macro fromVmImpl[T: seq](obj: typedesc[T], vmNode: Pnode): untyped =
-  let typ = newCall(ident"typeof"):
-    let extr = extractType(obj)
-    if extr[0].eqIdent"seq":
-      extr[^1]
-    else:
-      extr
+  let typ = extractType(obj)
   result = quote do:
-    var res = newSeq[`typ`](`vmNode`.sons.len)
+    var res: `typ`
+    res.setLen(`vmNode`.sons.len)
     for i, x in `vmNode`.sons:
-      res[i] = fromVm(`typ`, x)
+      res[i] = fromVm(typeof(res[0]), x)
     res
-  echo result.repr
+
 proc fromVm*[Y; T: seq[Y]](obj: typedesc[T], vmNode: Pnode): seq[Y] = fromVmImpl(obj, vmnode)
 
 
@@ -127,13 +129,19 @@ proc hasRecCase(n: NimNode): bool =
     if son.kind == nnkRecCase:
       return true
 
+proc baseSym(n: NimNode): NimNode =
+  if n.kind == nnkSym:
+    n
+  else:
+    n.basename
+
 proc addFields(n: NimNode, fields: var seq[NimNode]) =
   case n.kind
   of nnkRecCase:
-    fields.add n[0][0].basename
+    fields.add n[0][0].baseSym
   of nnkIdentDefs:
     for def in n[0..^3]:
-      fields.add def.basename
+      fields.add def.baseSym
   else:
     discard
 
@@ -167,21 +175,33 @@ proc parseObject(body, vmNode, baseType: NimNode, offset: var int, fields: var s
       defs.addFields(fields)
     for defs in body:
       stmtlistAdd parseObject(defs, vmNode, baseType, offset, fields)
-    if body[0].kind notin {nnkNilLit, nnkDiscardStmt}:
+    if body.len == 0 or body[0].kind notin {nnkNilLit, nnkDiscardStmt}:
       addConstr(body)
   of nnkIdentDefs:
     let typ = body[^2]
     for def in body[0..^3]:
-      let name = def.basename
+      let name = ident($def.baseSym)
       stmtlistAdd quote do:
-        let `name` = fromVm(typeof(`typ`), `vmNode`[`offset`][1])
+        let `name` =
+          if `vmNode`.kind == nkTupleConstr:
+            fromVm(typeof(`typ`), `vmNode`[`offset` - 1])
+          elif `vmNode`.kind == nkObjConstr:
+            fromVm(typeof(`typ`), `vmNode`[`offset`])
+          else:
+            fromVm(typeof(`typ`), `vmNode`)
       inc offset
   of nnkRecCase:
     let
-      descrimName = body[0][0].basename
+      descrimName = ident($body[0][0].baseSym)
       typ = body[0][1]
     stmtlistAdd quote do:
-      let `descrimName` = fromVm(typeof(`typ`), `vmNode`[`offset`][1])
+      let `descrimName` =
+        if `vmNode`.kind == nkTupleConstr:
+          fromVm(typeof(`typ`), `vmNode`[`offset` - 1])
+        elif `vmNode`.kind == nkObjConstr:
+          fromVm(typeof(`typ`), `vmNode`[`offset`][1])
+        else:
+          fromVm(typeof(`typ`), `vmNode`)
     inc offset
     let caseStmt = nnkCaseStmt.newTree(descrimName)
     let preFieldSize = fields.len
@@ -263,14 +283,14 @@ proc toPnode(body, obj, vmNode: NimNode, fields: seq[NimNode], offset: var int, 
 proc replaceGenerics(n: NimNode, genTyp: seq[(NimNode, NimNode)]) =
   for i in 0 ..< n.len:
     var x = n[i]
-    if x.kind == nnkSym:
+    if x.kind in {nnkSym, nnkIdent}:
       for (name, typ) in genTyp:
         if x.eqIdent(name):
           n[i] = typ
     else:
       replaceGenerics(x, genTyp)
 
-macro fromVmImpl[T: object](obj: typedesc[T], vmNode: PNode): untyped =
+macro fromVmImpl[T: object or tuple](obj: typedesc[T], vmNode: PNode): untyped =
   let
     typ = newCall(ident"typeof", obj)
     recList = block:
@@ -287,28 +307,45 @@ macro fromVmImpl[T: object](obj: typedesc[T], vmNode: PNode): untyped =
       else:
         extracted.getImpl[^1][^1]
   var offset = 1
-  result = newBlockStmt(parseObject(recList, vmNode, typ, offset))
-  result[1].insert 0, newCall(ident"privateAccess", typ)
+  result = newStmtList(newCall(bindSym"privateAccess", typ)):
+    parseObject(recList, vmNode, typ, offset)
+
+proc getRefRecList(n: NimNode): NimNode =
+  if n.len > 0:
+    let
+      impl = n[0].getImpl
+      recList = n[0].getImpl[^1][^1].copyNimTree
+      genParams = collect(newSeq):
+        for i, x in impl[1]:
+          (x, n[i + 1])
+    recList.replaceGenerics(genParams)
+    result = recList
+  else:
+    let recList = n.getImpl[^1][^1]
+    if recList.kind == nnkSym:
+      result = recList.getTypeImpl[^1]
+    else:
+      result = recList[^1]
 
 macro fromVmImpl[T: ref object](obj: typedesc[T], vmNode: PNode): untyped =
   let
-    obj = extractType(obj)
-  let
-    recList =
-      if obj.getImpl[^1][0].kind == nnkSym:
-        obj.getImpl[^1][0].getImpl[^1][^1]
-      else:
-        obj.getImpl[^1][0][^1]
+    typ = extractType(obj)
+    recList = getRefRecList(typ)
+    typConv = newCall(ident"typeof", typ)
   var offset = 1
-  result = newBlockStmt(parseObject(recList, vmNode, obj, offset))
-  result[1].insert 0, newCall(ident"privateAccess", newCall("typeof", obj))
+  result = newStmtList(newCall(bindSym"privateAccess", typConv)):
+    parseObject(recList, vmNode, typ, offset)
   result = quote do:
+    for i, x in `vmNode`:
+      if x.kind == nkExprColonExpr:
+        for y in x:
+          echo i, y.kind
     if `vmNode`.kind == nkNilLit:
-      `obj`(nil)
+      default(`typConv`)
     else:
       `result`
-
-proc fromVm*[T: object](obj: typedesc[T], vmNode: PNode): T = fromVmImpl(obj, vmnode)
+  echo result.repr
+proc fromVm*[T: object or tuple](obj: typedesc[T], vmNode: PNode): T = fromVmImpl(obj, vmnode)
 proc fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): T = fromVmImpl(obj, vmnode)
 
 proc toVm*[T: enum](a: T): Pnode = newIntNode(nkIntLit, a.ord.BiggestInt)

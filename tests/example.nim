@@ -11,5 +11,5 @@ const
   stdlib = findNimStdlibCompileTime()
 let
   intr = loadScript("tests/example/first.nims", testProc, modules = ["objects"], stdpath = stdlib)
- #  res = intr.get.invoke("fromJson", JsonNode)
+ # res = intr.get.invoke("fromJson", JsonNode)
  #intr.get.invoke("echoObj", ComplexObject(), void)
