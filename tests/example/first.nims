@@ -11,4 +11,5 @@ doStuffA(SomeRef(a: 100))
 doStuffB(@[10, 20, 30, 10, 50, 100])
 
 proc echoObj*(c: ComplexObject) = echo c
+proc jsonStuff*(j: JsonNode) = echo j.to(ComplexObject)
 proc fromJson*(): JsonNode = %* a

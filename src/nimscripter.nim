@@ -1,5 +1,5 @@
 import compiler / [nimeval, renderer, ast, llstream, vmdef, vm, lineinfos, idents]
-import std/[os, json, options, strutils]
+import std/[os, json, options, strutils, macros]
 import nimscripter/expose
 export destroyInterpreter, options, Interpreter, ast, lineinfos, idents
 
@@ -56,16 +56,31 @@ proc loadScript*(
   loadScript(script, [], isFile, modules, stdPath)
 
 
-proc invoke*[A](intr: Interpreter, procName: string, arg: A, T: typeDesc = void): T =
-  let foreignProc = intr.selectRoutine(procName)
-  var ret: PNode
-  ret = intr.callRoutine(foreignProc, [arg.toVm])
+macro invoke*(intr: Interpreter, pName: untyped, args: varargs[typed],
+    returnType: typedesc = void): untyped =
+  let
+    convs = newStmtList()
+    procName = newLit($pname)
+    argSym = genSym(nskVar, "args")
+    retName = genSym(nskLet, "ret")
+    retNode = newStmtList()
+    resultIdnt = ident"res"
 
-proc invoke*(intr: Interpreter, procName: string, T: typeDesc = void): T =
-  let foreignProc = intr.selectRoutine(procName)
-  if foreignProc != nil:
-    var ret: PNode
-    ret = intr.callRoutine(foreignProc, [])
-    result = fromVm(T, ret)
-  else:
-    raise newException(VmProcNotFound, "'$#' was not found in the script." % procName)
+  if not returnType.eqIdent("void"):
+    retNode.add nnkAsgn.newTree(resultIdnt, newCall(ident"fromVm", returnType, retName))
+    retNode.add resultIdnt
+
+  for x in args:
+    convs.add newCall(ident"add", argSym, newCall(ident"toVm", x))
+  result = quote do:
+    block:
+      when `returnType` isnot void:
+        var `resultIdnt`: `returnType`
+      let nsProc = `intr`.selectRoutine(`procName`)
+      if nsProc != nil:
+        var `argSym`: seq[Pnode]
+        `convs`
+        let `retName` = `intr`.callRoutine(nsProc, `argSym`)
+        `retNode`
+      else:
+        raise newException(VmProcNotFound, "'$#' was not found in the script." % `procName`)

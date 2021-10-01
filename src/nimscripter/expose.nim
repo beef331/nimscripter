@@ -1,5 +1,7 @@
 import std/[macros, macrocache, sugar, typetraits, importutils]
-import compiler/[renderer, ast, vmdef, vm, ast, astalgo]
+import compiler/[renderer, ast, vmdef, vm, ast, astalgo, idents]
+import compiler/vmMarshal{.all.} # Need this for getField
+
 import procsignature
 export VmProcSignature
 
@@ -35,8 +37,6 @@ proc getLambda*(pDef: NimNode): NimNode =
   ## This is what the vm calls internally when talking to Nim
   let
     vmArgs = ident"vmArgs"
-    args = ident"args"
-    pos = ident"pos"
     tmp = quote do:
       proc n(`vmArgs`: VmArgs){.closure, gcsafe.} = discard
 
@@ -112,17 +112,10 @@ proc fromVm*[T: object](obj: typedesc[T], vmNode: PNode): T
 proc fromVm*[T: tuple](obj: typedesc[T], vmNode: Pnode): T
 proc fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): T
 
-
-macro fromVmImpl[T: seq](obj: typedesc[T], vmNode: Pnode): untyped =
-  let typ = extractType(obj)
-  result = quote do:
-    var res: `typ`
-    res.setLen(`vmNode`.sons.len)
-    for i, x in `vmNode`.sons:
-      res[i] = fromVm(typeof(res[0]), x)
-    res
-
-proc fromVm*[Y; T: seq[Y]](obj: typedesc[T], vmNode: Pnode): seq[Y] = fromVmImpl(obj, vmnode)
+proc fromVm*[T](obj: typedesc[seq[T]], vmNode: Pnode): seq[T] =
+  result.setLen(vmNode.sons.len)
+  for i, x in vmNode.sons:
+    result[i] = fromVm(T, x)
 
 proc fromVm*[T: tuple](obj: typedesc[T], vmNode: Pnode): T =
   var index = 0
@@ -141,6 +134,12 @@ proc baseSym(n: NimNode): NimNode =
   else:
     n.basename
 
+proc baseIdent(n: Pnode): PIdent =
+  if n.kind == nkSym:
+    result = n.ident
+  elif n.kind == nkPostfix:
+    result = n[1].ident
+
 proc addFields(n: NimNode, fields: var seq[NimNode]) =
   case n.kind
   of nnkRecCase:
@@ -153,7 +152,7 @@ proc addFields(n: NimNode, fields: var seq[NimNode]) =
 
 proc parseObject(body, vmNode, baseType: NimNode, offset: var int, fields: var seq[
     NimNode]): NimNode =
-  ## Emits a constructor based off the type, works for variants and normal objects
+  ## Emits the VmNode -> Object constructor so the function can be called
 
   template stmtlistAdd(body: NimNode) =
     if result.kind == nnkNilLit:
@@ -224,56 +223,54 @@ proc parseObject(body, vmNode, baseType: NimNode, offset: var int): NimNode =
   var fields: seq[NimNode]
   result = parseObject(body, vmNode, baseType, offset, fields)
 
-proc toPnode(body, obj, vmNode: NimNode, fields: seq[NimNode], offset: var int, descrims: seq[
-    NimNode]): NimNode =
+
+proc toPnode(body, obj, vmNode: NimNode, offset: var int): NimNode =
   ## Emits a constructor based off the type, works for variants and normal objects
-  var
-    fields = fields # Copy since we're adding to this
-    descrims = descrims
 
-  var descrimInd = -1
-  for i, x in body:
-    case x.kind
-    of nnkIdentDefs:
-      for field in x[0..^3]:
-        let strField = newLit($field)
-        fields.add quote do: # Add the field parse to fields
-          let
-            n = newNode(nkExprColonExpr)
-            ident = PIdent(s: `strField`)
-          n.add newIdentNode(ident, unknownLineInfo)
-          n.add `obj`.`field`.toVm
-          `vmNode`.add n
-        inc offset
-    of nnkRecCase:
-      assert descrimInd == -1, "Presently this only supports a single descrim per indent"
-      descrimInd = i
-    else: discard
+  template stmtlistAdd(body: NimNode) =
+    if result.kind == nnkNilLit:
+      result = body
+    elif result.kind != nnkStmtList:
+      result = newStmtList(result, body)
+    else:
+      result.add body
 
-  if descrimInd >= 0:
-    # This is a descriminat emit case stmt
-    let
-      recCase = body[descrimInd]
-      discrim = recCase[0][0]
-      name = $discrim
-      descrimConv = quote do: # Emit a conversion for the descrim
-        let
-          n = newNode(nkExprColonExpr)
-          ident = PIdent(s: `name`)
-        n.add newIdentNode(ident, unknownLineInfo)
-        n.add `obj`.`discrim`.toVm
-        `vmNode`.add n
+  case body.kind
+  of nnkRecList:
+    for defs in body:
+      stmtlistAdd toPnode(defs, obj, vmNode, offset)
+    if body.len == 0:
+      stmtlistAdd nnkDiscardStmt.newTree(newEmptyNode())
+  of nnkIdentDefs:
+    for def in body[0..^3]:
+      let name = ident($def.baseSym)
+      stmtlistAdd quote do:
+        `vmNode`[`offset`] = newNode(nkExprColonExpr)
+        `vmNode`[`offset`].add newNode(nkEmpty)
+        `vmNode`[`offset`].add toVm(`obj`.`name`)
+      inc offset
+  of nnkRecCase:
+    let descrimName = ident($body[0][0].baseSym)
+    stmtlistAdd quote do:
+      `vmNode`[`offset`] = newNode(nkExprColonExpr)
+      `vmNode`[`offset`].add newNode(nkEmpty)
+      `vmNode`[`offset`].add toVm(`obj`.`descrimName`)
 
     inc offset
-    descrims.add descrimConv
-    result = newStmtList(nnkCaseStmt.newTree(newDotExpr(obj, discrim)))
-    for node in recCase[1..^1]:
-      let node = node.copyNimTree
-      node[^1] = node[^1].toPnode(obj, vmNode, fields, offset, descrims) # Replace typdef with conversion
-      result[^1].add node # Add to case statement
-  else:
-    result = newStmtList(descrims)
-    result.add fields
+    let caseStmt = nnkCaseStmt.newTree(newDotExpr(obj, descrimName))
+    for subDefs in body[1..^1]:
+      caseStmt.add toPnode(subDefs, obj, vmNode, offset)
+    stmtlistAdd caseStmt
+  of nnkOfBranch:
+    let
+      conditions = body[0]
+      ofBody = toPnode(body[1], obj, vmNode, offset)
+    stmtlistAdd body.kind.newTree(conditions, ofBody)
+  of nnkElse:
+    stmtlistAdd nnkElse.newTree(toPnode(body[0], obj, vmNode, offset))
+  of nnkNilLit:
+    stmtlistAdd nnkDiscardStmt.newTree(newEmptyNode())
+  else: discard
 
 proc replaceGenerics(n: NimNode, genTyp: seq[(NimNode, NimNode)]) =
   for i in 0 ..< n.len:
@@ -357,19 +354,57 @@ proc toVm*[T: uint](a: T): Pnode = newIntNode(nkuIntLit, a)
 
 proc toVm*[T: float32](a: T): Pnode = newFloatNode(nkFloat32Lit, a)
 proc toVm*[T: float64](a: T): Pnode = newFloatNode(nkFloat64Lit, a)
-
 proc toVm*[T: string](a: T): PNode = newStrNode(nkStrLit, a)
+proc toVm*[T: seq](obj: T): PNode
+proc toVm*[T: tuple](obj: T): PNode
+proc toVm*[T: object](obj: T): PNode
+proc toVm*[T: ref object](obj: T): PNode
 
+proc toVm*[T: seq](obj: T): PNode =
+  result = newNode(nkBracketExpr)
+  for x in obj:
+    result.add toVm(x)
 
-macro toVM*[T: object](obj: T): PNode =
+proc toVm*[T: tuple](obj: T): PNode =
+  result = newNode(nkTupleConstr)
+  for x in obj.fields:
+    result.add toVm(x)
+
+macro toVMImpl[T: object](obj: T): PNode =
   let
     pnode = genSym(nskVar, "node")
     recList = obj.getTypeImpl[^1]
   result = newStmtList()
   result.add quote do:
+    privateAccess(typeof(`obj`))
     var `pnode` = newNode(nkObjConstr)
-  var offset = 0
-  result.add toPnode(recList, obj, pnode, @[], offset, @[])
+  var offset = 1
+  result.add toPnode(recList, obj, pnode, offset)
   result.add pnode
-  result = newBlockStmt(result)
+  for x in 0..offset:
+    result.insert 1 + x, quote do:
+      `pnode`.add newNode(nkEmpty)
 
+proc toVm*[T: object](obj: T): PNode = toVMImpl(obj)
+
+macro toVMImpl[T: ref object](obj: T): PNode =
+  let pnode = genSym(nskVar, "node")
+  var recList = obj.getTypeImpl[^1]
+  if recList.kind == nnkSym:
+    reclist = recList.getTypeImpl[^1][^1]
+  result = newStmtList()
+  result.add quote do:
+    privateAccess(typeof(`obj`))
+    var `pnode` = newNode(nkObjConstr)
+  var offset = 1
+  result.add toPnode(recList, obj, pnode, offset)
+  result.add pnode
+  for x in 0..offset:
+    result.insert 1 + x, quote do:
+      `pnode`.add newNode(nkEmpty)
+
+proc toVm*[T: ref object](obj: T): PNode =
+  if obj.isNil:
+    newNode(nkEmpty)
+  else:
+    toVMImpl(obj)
