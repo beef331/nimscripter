@@ -1,6 +1,6 @@
 import compiler / [nimeval, renderer, ast, llstream, vmdef, vm, lineinfos, idents]
 import std/[os, json, options, strutils, macros]
-import nimscripter/expose
+import nimscripter/[expose, vmconversion]
 export destroyInterpreter, options, Interpreter, ast, lineinfos, idents
 
 import nimscripter/procsignature
@@ -65,13 +65,15 @@ macro invoke*(intr: Interpreter, pName: untyped, args: varargs[typed],
     retName = genSym(nskLet, "ret")
     retNode = newStmtList()
     resultIdnt = ident"res"
-
+    fromVm = bindSym"fromVm"
   if not returnType.eqIdent("void"):
-    retNode.add nnkAsgn.newTree(resultIdnt, newCall(ident"fromVm", returnType, retName))
+    retNode.add nnkAsgn.newTree(resultIdnt, newCall(fromVm, returnType, retName))
     retNode.add resultIdnt
 
-  for x in args:
-    convs.add newCall(ident"add", argSym, newCall(ident"toVm", x))
+  for arg in args:
+    convs.add quote do:
+      `argSym`.add toVm(`arg`)
+
   result = quote do:
     block:
       when `returnType` isnot void:
@@ -84,3 +86,4 @@ macro invoke*(intr: Interpreter, pName: untyped, args: varargs[typed],
         `retNode`
       else:
         raise newException(VmProcNotFound, "'$#' was not found in the script." % `procName`)
+  echo result.repr
