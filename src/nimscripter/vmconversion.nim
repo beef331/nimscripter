@@ -31,8 +31,6 @@ proc toVm*[T: tuple](obj: T): PNode
 proc toVm*[T: object](obj: T): PNode
 proc toVm*[T: ref object](obj: T): PNode
 
-
-
 proc extractType(typ: NimNode): NimNode =
   let impl = typ.getTypeInst
   impl[^1]

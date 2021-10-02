@@ -15,6 +15,11 @@ proc getSearchPath(path: string): seq[string] =
   for dir in walkDirRec(path, {pcDir}):
     result.add dir
 
+proc errorHook(config, info, msg, severity: auto) {.gcsafe.} =
+  if severity == Error and config.error_counter >= config.error_max:
+    echo "Script Error: ", info, " ", msg
+    raise (ref VMQuit)(info: info, msg: msg)
+
 proc loadScript*(
   script: string,
   userProcs: openArray[VmProcSignature],
@@ -44,9 +49,11 @@ proc loadScript*(
       intr.implementRoutine("*", scriptName, uProc.name, uProc.vmProc)
 
     when defined(debugScript): writeFile("debugScript.nims", additions & script)
-
-    intr.evalScript(llStreamOpen(additions & script))
-    result = option(intr)
+    intr.registerErrorHook(errorHook)
+    try:
+      intr.evalScript(llStreamOpen(additions & script))
+      result = option(intr)
+    except: discard
 
 proc loadScript*(
   script: string,

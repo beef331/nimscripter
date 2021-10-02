@@ -1,5 +1,5 @@
 import std/[macros, macrocache, typetraits]
-import compiler/[vmdef, vm]
+import compiler/[vmdef, vm, ast]
 import vmconversion
 
 import procsignature
@@ -31,6 +31,7 @@ func getVmRuntimeImpl*(pDef: NimNode): string =
   deSymd[^1] = nnkDiscardStmt.newTree(newEmptyNode())
   deSymd.repr
 
+proc getReg(vmargs: Vmargs, pos: int): TFullReg = vmargs.slots[pos + vmargs.rb + 1]
 
 proc getLambda*(pDef: NimNode): NimNode =
   ## Generates the lambda for the vm backed logic.
@@ -55,7 +56,24 @@ proc getLambda*(pDef: NimNode): NimNode =
         argNum = newLit(procArgs.len)
       procArgs.add idnt
       result[^1].add quote do:
-        var `idnt` = fromVm(typeof(`typ`), getNode(`vmArgs`, `argNum`))
+        let reg = getReg(`vmArgs`, `argNum`)
+        var `idnt` =
+          when `typ` is (SomeOrdinal or enum):
+            case reg.kind:
+            of nkInt:
+              `typ`(reg.intVal)
+            of nkNode:
+              fromVm(typeof(`typ`), reg.node)
+            else: discard
+          elif `typ` is SomeFloat:
+            case reg.kind:
+            of nkFloat:
+              `typ`(reg.floatVal)
+            of nkNode:
+              fromVm(typeof(`typ`), reg.node)
+            else: discard
+          else:
+            fromVm(typeof(`typ`), getNode(`vmArgs`, `argNum`))
   if pdef.params.len > 1:
     result[^1].add newCall(pDef[0], procArgs)
 

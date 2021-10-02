@@ -12,7 +12,6 @@ doStuffB(@[10, 20, 30, 10, 50, 100])
 
 proc echoObj*(c: ComplexObject) = echo c
 proc test*(a: int, b: float) = echo a, " ", b
-
-
 proc echoRef*(j: SomeRef) = echo j[]
+proc echoJson*(j: JsonNode) = echo j.pretty()
 proc fromJson*(): JsonNode = %* a
