@@ -70,20 +70,33 @@ macro invoke*(intr: Interpreter, pName: untyped, args: varargs[typed],
     retNode.add nnkAsgn.newTree(resultIdnt, newCall(fromVm, returnType, retName))
     retNode.add resultIdnt
 
-  for arg in args:
+  let nsProc = genSym(nskLet, "nsProc")
+  var nsCall: NimNode
+  if args.len > 0:
+    let count = newLit(args.len)
     convs.add quote do:
-      `argSym`.add toVm(`arg`)
+      var `argSym`: array[`count`, PNode]
+    nsCall = quote do:
+      `intr`.callRoutine(`nsProc`, `argSym`)
+  else:
+    nsCall = quote do:
+      `intr`.callRoutine(`nsProc`, [])
+
+  for i, arg in args:
+    convs.add quote do:
+      `argSym`[`i`] = toVm(`arg`)
 
   result = quote do:
     block:
       when `returnType` isnot void:
         var `resultIdnt`: `returnType`
-      let nsProc = `intr`.selectRoutine(`procName`)
-      if nsProc != nil:
-        var `argSym`: seq[Pnode]
+      let `nsProc` = `intr`.selectRoutine(`procName`)
+      if `nsProc` != nil:
         `convs`
-        let `retName` = `intr`.callRoutine(nsProc, `argSym`)
-        `retNode`
+        when `returnType` isnot void:
+          let `retName` = `nsCall`
+          `retNode`
+        else:
+          `nsCall`
       else:
         raise newException(VmProcNotFound, "'$#' was not found in the script." % `procName`)
-  echo result.repr
