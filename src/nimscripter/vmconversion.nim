@@ -23,8 +23,8 @@ proc toVm*[T: uint32](a: T): Pnode = newIntNode(nkuInt32Lit, a)
 proc toVm*[T: uint64](a: T): Pnode = newIntNode(nkuint64Lit, a)
 proc toVm*[T: uint](a: T): Pnode = newIntNode(nkuIntLit, a)
 
-proc toVm*[T: float32](a: T): Pnode = newFloatNode(nkFloat32Lit, a)
-proc toVm*[T: float64](a: T): Pnode = newFloatNode(nkFloat64Lit, a)
+proc toVm*[T: float32](a: T): Pnode = newFloatNode(nkFloat32Lit, BiggestFloat(a))
+proc toVm*[T: float64](a: T): Pnode = newFloatNode(nkFloat64Lit, BiggestFloat(a))
 proc toVm*[T: string](a: T): PNode = newStrNode(nkStrLit, a)
 proc toVm*[T: seq](obj: T): PNode
 proc toVm*[T: tuple](obj: T): PNode
@@ -317,6 +317,7 @@ macro toVMImpl[T: ref object](obj: T): PNode =
   for x in 0..offset:
     result.insert 1 + x, quote do:
       `pnode`.add newNode(nkEmpty)
+  echo result.repr
 
 proc toVm*[T: ref object](obj: T): PNode =
   if obj.isNil:

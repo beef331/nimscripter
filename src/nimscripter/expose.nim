@@ -29,6 +29,7 @@ func getVmRuntimeImpl*(pDef: NimNode): string =
   ## This does the interop and where we want a serializer if we ever can.
   let deSymd = deSym(pDef.copyNimTree())
   deSymd[^1] = nnkDiscardStmt.newTree(newEmptyNode())
+  deSymd[^2] = nnkDiscardStmt.newTree(newEmptyNode())
   deSymd.repr
 
 proc getReg(vmargs: Vmargs, pos: int): TFullReg = vmargs.slots[pos + vmargs.rb + 1]
@@ -57,25 +58,40 @@ proc getLambda*(pDef: NimNode): NimNode =
       procArgs.add idnt
       result[^1].add quote do:
         let reg = getReg(`vmArgs`, `argNum`)
-        var `idnt` =
-          when `typ` is (SomeOrdinal or enum):
-            case reg.kind:
-            of nkInt:
-              `typ`(reg.intVal)
-            of nkNode:
-              fromVm(typeof(`typ`), reg.node)
-            else: discard
-          elif `typ` is SomeFloat:
-            case reg.kind:
-            of nkFloat:
-              `typ`(reg.floatVal)
-            of nkNode:
-              fromVm(typeof(`typ`), reg.node)
-            else: discard
-          else:
-            fromVm(typeof(`typ`), getNode(`vmArgs`, `argNum`))
+        var `idnt`: `typ`
+        when `typ` is (SomeOrdinal or enum):
+          case reg.kind:
+          of rkInt:
+            `idnt` = `typ`(reg.intVal)
+          of rkNode:
+            `idnt` = fromVm(typeof(`typ`), reg.node)
+          else: discard
+        elif `typ` is SomeFloat:
+          case reg.kind:
+          of rkFloat:
+            `idnt` = `typ`(reg.floatVal)
+          of rkNode:
+            `idnt` = fromVm(typeof(`typ`), reg.node)
+          else: discard
+        else:
+          `idnt` = fromVm(typeof(`typ`), getNode(`vmArgs`, `argNum`))
   if pdef.params.len > 1:
     result[^1].add newCall(pDef[0], procArgs)
+  else:
+    result[^1].add newCall(pDef[0])
+  if pdef.params[0].kind != nnkEmpty:
+    let
+      retT = pDef.params[0]
+      call = result[^1][^1]
+    result[^1][^1] = quote do:
+      when `retT` is (SomeOrdinal or enum):
+        `vmArgs`.setResult(BiggestInt(`call`))
+      elif `retT` is SomeFloat:
+        `vmArgs`.setResult(BiggestFloat(`call`))
+      elif `retT` is string:
+        `vmArgs`.setResult(`call`)
+      else:
+        `vmArgs`.setResult(`call`)
 
 const procedureCache = CacheTable"NimscriptProcedures"
 
@@ -103,4 +119,3 @@ macro implNimscriptModule*(moduleName: untyped): untyped =
         vmRunImpl: `runImpl`,
         vmProc: `lambda`
       )
-
