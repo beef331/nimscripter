@@ -1,14 +1,8 @@
 import std/[macros, macrocache, sugar, typetraits, importutils]
 import compiler/[renderer, ast, idents]
 
-
-
-
-
-
-
-proc toVm*[T: enum](a: T): Pnode = newIntNode(nkIntLit, a.ord.BiggestInt)
-proc toVm*[T: bool](a: T): Pnode = newIntNode(nkIntLit, a.ord.BiggestInt)
+proc toVm*[T: enum or bool](a: T): Pnode = newIntNode(nkIntLit, a.ord.BiggestInt)
+#proc toVm*[T: bool](a: T): Pnode = newIntNode(nkIntLit, a.ord.BiggestInt)
 proc toVm*[T: char](a: T): Pnode = newIntNode(nkUInt8Lit, a.ord.BiggestInt)
 
 proc toVm*[T: int8](a: T): Pnode = newIntNode(nkInt8Lit, a)
@@ -314,13 +308,12 @@ macro toVMImpl[T: ref object](obj: T): PNode =
   var offset = 1
   result.add toPnode(recList, obj, pnode, offset)
   result.add pnode
-  for x in 0..offset:
+  for x in 0..<offset:
     result.insert 1 + x, quote do:
       `pnode`.add newNode(nkEmpty)
-  echo result.repr
 
 proc toVm*[T: ref object](obj: T): PNode =
   if obj.isNil:
-    newNode(nkEmpty)
+    newNode(nkNilLit)
   else:
     toVMImpl(obj)

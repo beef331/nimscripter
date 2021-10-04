@@ -13,5 +13,8 @@ doStuffB(@[10, 20, 30, 10, 50, 100])
 proc echoObj*(c: ComplexObject) = echo c
 proc test*(a: int, b: float) = echo a, " ", b
 proc echoRef*(j: SomeRef) = echo j[]
-proc echoJson*(j: JsonNode) = echo j.to(int)
+proc echoJson*(j: JsonNode) = 
+  let a = j.to(int)
+  echo a
+
 proc fromJson*(): JsonNode = %* a

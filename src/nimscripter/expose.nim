@@ -91,19 +91,29 @@ proc getLambda*(pDef: NimNode): NimNode =
       elif `retT` is string:
         `vmArgs`.setResult(`call`)
       else:
-        `vmArgs`.setResult(`call`)
+        `vmArgs`.setResult(toVm(`call`))
 
 const procedureCache = CacheTable"NimscriptProcedures"
 
+proc addToCache(n: NimNode, moduleName: string) = 
+  for name, _ in procedureCache:
+    if name == moduleName:
+      procedureCache[name].add n
+      return
+  procedureCache[moduleName] = nnkStmtList.newTree(n)
+
 macro exportToScript*(moduleName: untyped, procedure: typed): untyped =
   result = procedure
-  moduleName.expectKind(nnkIdent)
-  block add:
-    for name, _ in procedureCache:
-      if name == $moduleName:
-        procedureCache[name].add procedure
-        break add
-    procedureCache[$moduleName] = nnkStmtList.newTree(procedure)
+  if procedure.kind == nnkProcDef:
+    addToCache(procedure, $moduleName)
+  else:
+    error("Use `exportTo` for block definitions, `exportToScript` is for proc defs only", procedure)
+
+macro exportTo*(moduleName: static string, procDefs: typed): untyped =
+  for pDef in procDefs:
+    if pdef.kind == nnkProcDef:
+      addToCache(pDef, moduleName)
+  result = procDefs
 
 macro implNimscriptModule*(moduleName: untyped): untyped =
   moduleName.expectKind(nnkIdent)

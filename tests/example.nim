@@ -4,11 +4,12 @@ import example/objects
 import compiler/nimeval
 import json
 
-proc doStuff(a: ComplexObject) {.exportToScript: test.} = echo a
-proc doStuffA(a: SomeRef) {.exportToScript: test.} =
-  if a != nil:
-    echo a.a
-proc doStuffB(a: seq[int]) {.exportToScript: test.} = echo a
+exportTo("test"):
+  proc doStuff(a: ComplexObject) = echo a
+  proc doStuffA(a: SomeRef) =
+    if a != nil:
+      echo a.a
+  proc doStuffB(a: seq[int]) = echo a
 const
   testProc = implNimscriptModule(test)
   stdlib = findNimStdlibCompileTime()

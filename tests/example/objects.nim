@@ -12,3 +12,13 @@ type
       someIntTwo*: int
   SomeRef* = ref object
     a*: int
+  SomeEnum* = enum
+    a, b, c, d
+  SomeVarObject* = ref object
+    case kind: SomeEnum
+    of a:
+      b*: float
+    of d:
+      c*: int
+    else:
+      d*: string
