@@ -13,8 +13,13 @@ doStuffB(@[10, 20, 30, 10, 50, 100])
 proc echoObj*(c: ComplexObject) = echo c
 proc test*(a: int, b: float) = echo a, " ", b
 proc echoRef*(j: SomeRef) = echo j[]
+proc echoTuple*(t: ((int, int), int, int, SomeRef)) = echo t
+
 proc echoJson*(j: JsonNode) = 
-  let a = j.to(int)
+  let a = j.to(ComplexObject)
   echo a
+
+proc recObj*(r: RecObject) = 
+  echo r.b
 
 proc fromJson*(): JsonNode = %* a
