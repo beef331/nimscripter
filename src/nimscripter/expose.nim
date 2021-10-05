@@ -134,7 +134,10 @@ macro exportTo*(moduleName: untyped, procDefs: varargs[typed]): untyped =
       addToCache(pDef, $moduleName)
     elif pdef.kind == nnkSym and pdef.symKind in {nskProc, nskFunc}:
       addToCache(pdef.getImpl, $moduleName)
+    elif pdef.kind == nnkSym and pdef.symKind in {nskVar, nskLet, nskConst}:
+      addToCache(pdef, $modulename)
     else:
+      echo pdef.symKind
       error("Invalid procdef", pdef)
 
 iterator generateParamHeaders(paramList: NimNode, types: seq[(int, NimNode)], indicies: var seq[int]): NimNode =
@@ -167,7 +170,7 @@ proc generateTypeclassProcSignatures(pDef: Nimnode): NimNode =
     for i, x in params:
       if i > 0:
         procname.add(x[^2].repr)
-    echo procName
+
     let
       realName = ident(procName)
       strName = newLit($procName)
@@ -193,25 +196,41 @@ proc generateTypeclassProcSignatures(pDef: Nimnode): NimNode =
         vmRunImpl: `runImpl`,
         vmProc: `lambda`
       )
-  echo result.repr
-
 
 macro implNimscriptModule*(moduleName: untyped): untyped =
   moduleName.expectKind(nnkIdent)
   result = nnkBracket.newNimNode()
   for p in procedureCache[$moduleName]:
-    if p[2].len == 0: 
-      # is not a generic proc dont need anything special
+    case p.kind
+    of nnkProcDef:
+      if p[2].len == 0: 
+        # is not a generic proc dont need anything special
+        let
+          runImpl = getVmRuntimeImpl(p)
+          lambda = getLambda(p)
+          realName = $p[0]
+        result.add quote do:
+          VmProcSignature(
+            name: `realName`,
+            vmRunImpl: `runImpl`,
+            vmProc: `lambda`
+          )
+      else:
+        for x in generateTypeclassProcSignatures(p):
+          result.add x
+    of nnkSym:
       let
-        runImpl = getVmRuntimeImpl(p)
-        lambda = getLambda(p)
-        realName = $p[0]
+        strName = $p
+        procName = ident(strName)
+        typ = getType(p)
+        runCode = quote:
+          proc `procName`(): `typ` = discard
+        runImpl = runcode.repr
       result.add quote do:
         VmProcSignature(
-          name: `realName`,
-          vmRunImpl: `runImpl`,
-          vmProc: `lambda`
-        )
-    else:
-      for x in generateTypeclassProcSignatures(p):
-        result.add x
+            name: `strName`,
+            vmRunImpl: `runImpl`,
+            vmProc: proc(vmArgs: VmArgs){.gcsafe.} = 
+              vmArgs.setResult(toVm(`p`))
+          )
+    else: error("Some bug", p)
