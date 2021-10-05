@@ -4,12 +4,17 @@ import example/objects
 import compiler/nimeval
 import json
 
-exportTo("test"):
-  proc doStuff(a: ComplexObject) = echo a
-  proc doStuffA(a: SomeRef) =
-    if a != nil:
-      echo a.a
-  proc doStuffB(a: seq[int]) = echo a
+var compl: ComplexObject
+proc doStuff(a: ComplexObject) = compl = a
+proc doStuffA(a: SomeRef) =
+  if a != nil:
+    echo a.a
+proc doStuffB(a: seq[int]) = echo a
+
+exportTo(test,
+  doStuff,
+  doStuffA,
+  doStuffB)
 const
   testProc = implNimscriptModule(test)
   stdlib = findNimStdlibCompileTime()
@@ -20,4 +25,6 @@ echo res.pretty
 
 intr.get.invoke(echoObj, ComplexObject(someBool: false, someInt: 320, someintTwo: 42))
 intr.get.invoke(test, 10, 20d, returnType = void)
-intr.get.invoke(echoJson, %* 300)
+intr.get.invoke(echoTuple, ((100, 200), 200, 300, SomeRef(a: 300)))
+intr.get.invoke(recObj, RecObject(next: RecObject(), b: {"hello": "world"}.toTable))
+intr.get.invoke(echoJson, %* compl)

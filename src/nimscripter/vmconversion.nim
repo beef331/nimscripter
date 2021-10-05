@@ -1,9 +1,8 @@
 import std/[macros, macrocache, sugar, typetraits, importutils]
 import compiler/[renderer, ast, idents]
 
-proc toVm*[T: enum or bool](a: T): Pnode = newIntNode(nkIntLit, a.ord.BiggestInt)
-#proc toVm*[T: bool](a: T): Pnode = newIntNode(nkIntLit, a.ord.BiggestInt)
-proc toVm*[T: char](a: T): Pnode = newIntNode(nkUInt8Lit, a.ord.BiggestInt)
+proc toVm*[T: enum or bool](a: T): Pnode = newIntNode(nkIntLit, a.BiggestInt)
+proc toVm*[T: char](a: T): Pnode = newIntNode(nkUInt8Lit, a.BiggestInt)
 
 proc toVm*[T: int8](a: T): Pnode = newIntNode(nkInt8Lit, a)
 proc toVm*[T: int16](a: T): Pnode = newIntNode(nkInt16Lit, a)
@@ -300,7 +299,7 @@ macro toVMImpl[T: ref object](obj: T): PNode =
   let pnode = genSym(nskVar, "node")
   var recList = obj.getTypeImpl[^1]
   if recList.kind == nnkSym:
-    reclist = recList.getTypeImpl[^1][^1]
+    reclist = recList.getTypeImpl[^1]
   result = newStmtList()
   result.add quote do:
     privateAccess(typeof(`obj`))
@@ -309,7 +308,7 @@ macro toVMImpl[T: ref object](obj: T): PNode =
   result.add toPnode(recList, obj, pnode, offset)
   result.add pnode
   for x in 0..<offset:
-    result.insert 1 + x, quote do:
+    result.insert 1, quote do:
       `pnode`.add newNode(nkEmpty)
 
 proc toVm*[T: ref object](obj: T): PNode =

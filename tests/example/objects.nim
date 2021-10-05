@@ -1,3 +1,5 @@
+import std/tables
+export tables
 type 
   ComplexObject* = object
     someInt*: int
@@ -22,3 +24,6 @@ type
       c*: int
     else:
       d*: string
+  RecObject* = ref object
+    next*: RecObject
+    b*: Table[string, string]
