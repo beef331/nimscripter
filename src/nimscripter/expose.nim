@@ -162,6 +162,9 @@ iterator generateParamHeaders(paramList: NimNode, types: seq[(int, NimNode)], in
 
 proc makeVMProcSignature(n: NimNode, genSym = false): NimNode =
   if not genSym:
+    n[4] = newEmptyNode() # remove pragmas
+    n[^2] = newStmtList() # remove bodies
+    n[^1] = newStmtList() # remove bodies
     let
       runImpl = getVmRuntimeImpl(n)
       lambda = getLambda(n)
@@ -180,13 +183,21 @@ proc makeVMProcSignature(n: NimNode, genSym = false): NimNode =
       newName = genSym($n[0])
       strName = $newName
     newDef[0] = newName
+    newDef[4] = newEmptyNode() # Remove pragmas
+    newDef[^1] = newStmtList() # Removes body
+    newDef[^2] = newStmtList() # Removes body
+
     var runImpl = getVmRuntimeImpl(newDef)
     let lambda = getLambda(n)
     newDef[0] = n[0]
     newDef[^1] = newCall(newName)
+    newDef[^2] = newCall(newName)
+    echo newDef.repr
     for i, def in n.params:
       if i > 0:
+        # Body can be in one of two places
         newDef[^1].add def[0..^3]
+        newDef[^2].add def[0..^3]
     runImpl.add newDef.repr
     result = quote do:
       VmProcSignature(
@@ -212,7 +223,7 @@ proc generateTypeclassProcSignatures(pDef: Nimnode): NimNode =
 
 proc generateModuleImpl(n: NimNode, genSym = false): NimNode =
   case n.kind
-    of nnkProcDef:
+    of nnkProcDef, nnkFuncDef:
       if n[2].len == 0:
         # is not a generic proc dont need anything special
         result = makeVMProcSignature(n, genSym)
@@ -252,7 +263,7 @@ proc generateModuleImpl(n: NimNode, genSym = false): NimNode =
             result.add impl
         else:
           result.add impls
-    else: error("Some bug", n)
+    else: error("Some bug: " & $n.kind, n)
 
 
 macro implNimscriptModule*(moduleName: untyped): untyped =
