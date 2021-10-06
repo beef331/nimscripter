@@ -1,9 +1,15 @@
-import std/[macros, macrocache, typetraits]
+import std/[macros, macrocache, typetraits, random]
 import compiler/[vmdef, vm, ast]
 import vmconversion
 
 import procsignature
 export VmProcSignature
+
+var genSymOffset {.compileTime.} = 321321
+
+proc genSym(name: string): NimNode =
+  result = ident(name & $genSymOffset)
+  inc genSymOffset
 
 func deSym*(n: NimNode): NimNode =
   # Remove all symbols
@@ -114,31 +120,30 @@ proc getLambda*(pDef: NimNode, realProcName: Nimnode = nil): NimNode =
 
 const procedureCache = CacheTable"NimscriptProcedures"
 
-proc addToCache(n: NimNode, moduleName: string) = 
+proc addToCacheImpl(n: NimNode, moduleName: string) =
+  var impl: NimNode
+  if n.kind == nnkProcDef:
+    impl = n
+  elif n.kind == nnkSym and n.symKind in {nskProc, nskFunc}:
+    impl = n.getImpl
+  elif n.kind == nnkSym and n.symKind in {nskVar, nskLet, nskConst}:
+    impl = n
+  else: 
+    impl = n
   for name, _ in procedureCache:
     if name == moduleName:
       procedureCache[name].add n
       return
   procedureCache[moduleName] = nnkStmtList.newTree(n)
 
-macro exportToScript*(moduleName: untyped, procedure: typed): untyped =
-  result = procedure
-  if procedure.kind == nnkProcDef:
-    addToCache(procedure, $moduleName)
-  else:
-    error("Use `exportTo` for block definitions, `exportToScript` is for proc defs only", procedure)
+macro addToCache*(sym: typed, moduleName: static string) = 
+  addToCacheImpl(sym, moduleName)
 
-macro exportTo*(moduleName: untyped, procDefs: varargs[typed]): untyped =
+macro exportTo*(moduleName: untyped, procDefs: varargs[untyped]): untyped =
+  result = newStmtList()
+  var moduleName = $moduleName
   for pDef in procDefs:
-    if pdef.kind == nnkProcDef:
-      addToCache(pDef, $moduleName)
-    elif pdef.kind == nnkSym and pdef.symKind in {nskProc, nskFunc}:
-      addToCache(pdef.getImpl, $moduleName)
-    elif pdef.kind == nnkSym and pdef.symKind in {nskVar, nskLet, nskConst}:
-      addToCache(pdef, $modulename)
-    else:
-      echo pdef.symKind
-      error("Invalid procdef", pdef)
+    result.add newCall("addToCache", pdef, newLit(modulename))
 
 iterator generateParamHeaders(paramList: NimNode, types: seq[(int, NimNode)], indicies: var seq[int]): NimNode =
   var params = copyNimTree(paramList)
@@ -155,6 +160,42 @@ iterator generateParamHeaders(paramList: NimNode, types: seq[(int, NimNode)], in
           inc indicies[i + 1]
           indicies[i] = 0
 
+proc makeVMProcSignature(n: NimNode, genSym = false): NimNode =
+  if not genSym:
+    let
+      runImpl = getVmRuntimeImpl(n)
+      lambda = getLambda(n)
+      realName = $n[0]
+    result = quote do:
+      VmProcSignature(
+        name: `realName`,
+        vmRunImpl: `runImpl`,
+        vmProc: `lambda`
+      )
+  else:
+    # This is gensym'd so there is a proc calling a hidden proc,
+    # since the VM doesnt support overload implementations
+    let
+      newDef = copyNimTree(n)
+      newName = genSym($n[0])
+      strName = $newName
+    newDef[0] = newName
+    var runImpl = getVmRuntimeImpl(newDef)
+    let lambda = getLambda(n)
+    newDef[0] = n[0]
+    newDef[^1] = newCall(newName)
+    for i, def in n.params:
+      if i > 0:
+        newDef[^1].add def[0..^3]
+    runImpl.add newDef.repr
+    result = quote do:
+      VmProcSignature(
+        name: `strName`,
+        vmRunImpl: `runImpl`,
+        vmProc: `lambda`
+      )
+
+
 proc generateTypeclassProcSignatures(pDef: Nimnode): NimNode =
   result = newStmtList()
   var
@@ -165,79 +206,62 @@ proc generateTypeclassProcSignatures(pDef: Nimnode): NimNode =
       types.add (i, pdef.params[i][^2])
       indicies.add 0
   for params in generateParamHeaders(pDef.params, types, indicies):
-    var procName = $pdef[0]
     let newDef = pdef.copyNimTree
-    for i, x in params:
-      if i > 0:
-        procname.add(x[^2].repr)
-
-    let
-      realName = ident(procName)
-      strName = newLit($procName)
-
-    newDef[0] = realName
     newDef[3] = params
-    
-    var runImpl = getVmRuntimeImpl(newDef)
-    let
-      lambda = getLambda(newDef, pdef[0])
-    newDef[0] = pdef[0]
-    newDef[^1] = newCall(realName)
+    result.add makeVMProcSignature(newDef, true)
 
-    for i, def in pdef.params:
-      if i > 0:
-        for ident in def[0..^3]:
-          newDef[^1].add ident
-    runImpl.add newDef.repr
+proc generateModuleImpl(n: NimNode, genSym = false): NimNode =
+  case n.kind
+    of nnkProcDef:
+      if n[2].len == 0:
+        # is not a generic proc dont need anything special
+        result = makeVMProcSignature(n, genSym)
+      else:
+        result = generateTypeclassProcSignatures(n):
+    of nnkSym:
+      if n.symKind in {nskProc, nskFunc}:
+        result = generateModuleImpl(n.getImpl, genSym)
+      elif n.symKind in {nskVar, nskLet, nskConst}:
+        let
+          strName = $n
+          procName = ident(strName)
+          typ = getType(n)
+          runCode = quote:
+            proc `procName`(): `typ` = discard
+          runImpl = runcode.repr
+        result = quote do:
+          VmProcSignature(
+              name: `strName`,
+              vmRunImpl: `runImpl`,
+              vmProc: proc(vmArgs: VmArgs){.gcsafe.} =
+                when `typ` is (SomeOrdinal or enum):
+                  vmArgs.setResult(`n`.BiggestInt)
+                elif `typ` is SomeFloat:
+                  vmArgs.setResult(`n`.BiggestFloat)
+                elif `typ` is string:
+                  vmargs.setResult(`n`)
+                else:
+                  vmArgs.setResult(toVm(`n`))
+            )
+    of nnkClosedSymChoice:
+      result = newStmtList()
+      for impl in n:
+        let impls = generateModuleImpl(impl, true) 
+        if impls.kind == nnkStmtList:
+          for impl in impls:
+            result.add impl
+        else:
+          result.add impls
+    else: error("Some bug", n)
 
-    result.add quote do:
-      VmProcSignature(
-        name: `strName`,
-        vmRunImpl: `runImpl`,
-        vmProc: `lambda`
-      )
 
 macro implNimscriptModule*(moduleName: untyped): untyped =
   moduleName.expectKind(nnkIdent)
   result = nnkBracket.newNimNode()
   for p in procedureCache[$moduleName]:
-    case p.kind
-    of nnkProcDef:
-      if p[2].len == 0: 
-        # is not a generic proc dont need anything special
-        let
-          runImpl = getVmRuntimeImpl(p)
-          lambda = getLambda(p)
-          realName = $p[0]
-        result.add quote do:
-          VmProcSignature(
-            name: `realName`,
-            vmRunImpl: `runImpl`,
-            vmProc: `lambda`
-          )
-      else:
-        for x in generateTypeclassProcSignatures(p):
-          result.add x
-    of nnkSym:
-      let
-        strName = $p
-        procName = ident(strName)
-        typ = getType(p)
-        runCode = quote:
-          proc `procName`(): `typ` = discard
-        runImpl = runcode.repr
-      result.add quote do:
-        VmProcSignature(
-            name: `strName`,
-            vmRunImpl: `runImpl`,
-            vmProc: proc(vmArgs: VmArgs){.gcsafe.} =
-              when `typ` is (SomeOrdinal or enum):
-                vmArgs.setResult(`p`.BiggestInt)
-              elif `typ` is SomeFloat:
-                vmArgs.setResult(`p`.BiggestFloat)
-              elif `typ` is string:
-                vmargs.setResult(`p`)
-              else:
-                vmArgs.setResult(toVm(`p`))
-          )
-    else: error("Some bug", p)
+    let impl = generateModuleImpl(p)
+    if impl.kind == nnkStmtList:
+      for child in impl:
+        result.add child
+    else:
+      result.add impl
