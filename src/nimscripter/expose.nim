@@ -149,7 +149,7 @@ proc addToAddonCache(n: NimNode, moduleName: string) =
   addonsCache[moduleName] = nnkStmtList.newTree(impl)
 
 macro addToCache*(sym: typed, moduleName: static string) =
-  if sym.kind == nnkSym and sym.symKind in {nskType, nskConverter, nskIterator, nskMacro}:
+  if sym.kind == nnkSym and sym.symKind in {nskType, nskConverter, nskIterator, nskMacro, nskTemplate}:
     addToAddonCache(sym, moduleName)
   else:
     addToProcCache(sym, moduleName)
