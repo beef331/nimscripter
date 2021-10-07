@@ -14,12 +14,16 @@ proc doStuffB(a: seq[int]) = echo a
 exportTo(test,
   doStuff,
   doStuffA,
-  doStuffB)
+  doStuffB,
+  ComplexObject,
+  SomeRef,
+  RecObject
+  )
 const
-  testProc = implNimscriptModule(test)
+  (testProc, additions) = implNimscriptModule(test)
   stdlib = findNimStdlibCompileTime()
 let
-  intr = loadScript("tests/example/first.nims", testProc, modules = ["objects"], stdpath = stdlib)
+  intr = loadScript("tests/example/first.nims", testProc, additions = additions, modules = ["tables"], stdpath = stdlib)
   res = intr.get.invoke(fromJson, returnType = JsonNode)
 echo res.pretty
 

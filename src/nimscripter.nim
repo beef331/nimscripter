@@ -24,11 +24,12 @@ proc loadScript*(
   script: string,
   userProcs: openArray[VmProcSignature],
   isFile = true,
+  additions = "",
   modules: varargs[string],
   stdPath = "./stdlib"): Option[Interpreter] =
 
   if not isFile or fileExists(script):
-    var additions = ""
+    var additions = additions
     for `mod` in modules: # Add modules
       additions.insert("import " & `mod` & "\n", 0)
 
@@ -60,7 +61,7 @@ proc loadScript*(
   isFile = true,
   modules: varargs[string],
   stdPath = "./stdlib"): Option[Interpreter] {.inline.} =
-  loadScript(script, [], isFile, modules, stdPath)
+  loadScript(script, [], isFile, modules = modules, stdPath = stdPath)
 
 
 macro invoke*(intr: Interpreter, pName: untyped, args: varargs[typed],

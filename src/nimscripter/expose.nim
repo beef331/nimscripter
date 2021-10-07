@@ -1,4 +1,4 @@
-import std/[macros, macrocache, typetraits, random]
+import std/[macros, macrocache, typetraits, strutils]
 import compiler/[vmdef, vm, ast]
 import vmconversion
 
@@ -118,9 +118,11 @@ proc getLambda*(pDef: NimNode, realProcName: Nimnode = nil): NimNode =
       else:
         `vmArgs`.setResult(toVm(`call`))
 
-const procedureCache = CacheTable"NimscriptProcedures"
+const
+  procedureCache = CacheTable"NimscriptProcedures"
+  addonsCache = CacheTable"NimscriptAddons"
 
-proc addToCacheImpl(n: NimNode, moduleName: string) =
+proc addToProcCache(n: NimNode, moduleName: string) =
   var impl: NimNode
   if n.kind == nnkProcDef:
     impl = n
@@ -136,8 +138,21 @@ proc addToCacheImpl(n: NimNode, moduleName: string) =
       return
   procedureCache[moduleName] = nnkStmtList.newTree(n)
 
-macro addToCache*(sym: typed, moduleName: static string) = 
-  addToCacheImpl(sym, moduleName)
+proc addToAddonCache(n: NimNode, moduleName: string) =
+  var impl = n.getImpl()
+  if impl.kind == nnktypeDef:
+    impl = nnkTypeSection.newTree(impl)
+  for name, _ in addonsCache:
+    if name == moduleName:
+      addonsCache[name].add impl
+      return
+  addonsCache[moduleName] = nnkStmtList.newTree(impl)
+
+macro addToCache*(sym: typed, moduleName: static string) =
+  if sym.kind == nnkSym and sym.symKind in {nskType, nskConverter, nskIterator, nskMacro}:
+    addToAddonCache(sym, moduleName)
+  else:
+    addToProcCache(sym, moduleName)
 
 macro exportTo*(moduleName: untyped, procDefs: varargs[untyped]): untyped =
   result = newStmtList()
@@ -192,7 +207,7 @@ proc makeVMProcSignature(n: NimNode, genSym = false): NimNode =
     newDef[0] = n[0]
     newDef[^1] = newCall(newName)
     newDef[^2] = newCall(newName)
-    echo newDef.repr
+
     for i, def in n.params:
       if i > 0:
         # Body can be in one of two places
@@ -234,11 +249,13 @@ proc generateModuleImpl(n: NimNode, genSym = false): NimNode =
         result = generateModuleImpl(n.getImpl, genSym)
       elif n.symKind in {nskVar, nskLet, nskConst}:
         let
-          strName = $n
-          procName = ident(strName)
+          procName = genSym($n)
+          strName = $procName
           typ = getType(n)
+          realName = n
           runCode = quote:
             proc `procName`(): `typ` = discard
+            template `realName`: `typ` = `procName`()
           runImpl = runcode.repr
         result = quote do:
           VmProcSignature(
@@ -276,3 +293,11 @@ macro implNimscriptModule*(moduleName: untyped): untyped =
         result.add child
     else:
       result.add impl
+  var addons = ""
+  for (key, val) in addonsCache.pairs:
+    if modulename.eqIdent(key):
+      for impl in val:
+        addons.add impl.repr
+        addons.setLen(addons.rfind('\n') + 1) # removes indentations
+  if addons.len > 0:
+    result = nnkTupleConstr.newTree(result, newLit(addons))
