@@ -23,7 +23,7 @@ const
   (testProc, additions) = implNimscriptModule(test)
   stdlib = findNimStdlibCompileTime()
 let
-  intr = loadScript("tests/example/first.nims", testProc, additions = additions, modules = ["tables"], stdpath = stdlib)
+  intr = loadScript("tests/example/first.nims".NimScriptPath, testProc, additions = additions, modules = ["tables"], stdpath = stdlib)
   res = intr.get.invoke(fromJson, returnType = JsonNode)
 echo res.pretty
 

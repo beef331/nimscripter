@@ -9,6 +9,8 @@ type
   VMQuit* = object of CatchableError
     info*: TLineInfo
   VmProcNotFound* = object of CatchableError
+  NimScriptFile* = distinct string
+  NimScriptPath* = distinct string
 
 proc getSearchPath(path: string): seq[string] =
   result.add path
@@ -21,14 +23,13 @@ proc errorHook(config, info, msg, severity: auto) {.gcsafe.} =
     raise (ref VMQuit)(info: info, msg: msg)
 
 proc loadScript*(
-  script: string,
+  script: NimScriptFile or NimScriptPath,
   userProcs: openArray[VmProcSignature],
-  isFile = true,
   additions = "",
   modules: varargs[string],
   stdPath = "./stdlib"): Option[Interpreter] =
-
-  if not isFile or fileExists(script):
+  const isFile = script is NimScriptPath
+  if not isFile or fileExists(script.string):
     var additions = additions
     for `mod` in modules: # Add modules
       additions.insert("import " & `mod` & "\n", 0)
@@ -37,14 +38,14 @@ proc loadScript*(
       additions.add uProc.vmRunImpl
 
     var searchPaths = getSearchPath(stdPath)
-    let scriptName = if isFile: script.splitFile.name else: "script"
+    let scriptName = when isFile: script.string.splitFile.name else: "script"
 
-    if isFile: # If is file we want to enable relative imports
-      searchPaths.add script.parentDir
+    when isFile: # If is file we want to enable relative imports
+      searchPaths.add script.string.parentDir
 
     let
       intr = createInterpreter(scriptName, searchPaths)
-      script = if isFile: readFile(script) else: script
+      script = when isFile: readFile(script.string) else: script.string
 
     for uProc in userProcs:
       intr.implementRoutine("*", scriptName, uProc.name, uProc.vmProc)
@@ -57,7 +58,7 @@ proc loadScript*(
     except: discard
 
 proc loadScript*(
-  script: string,
+  script: NimScriptFile or NimScriptPath,
   isFile = true,
   modules: varargs[string],
   stdPath = "./stdlib"): Option[Interpreter] {.inline.} =
