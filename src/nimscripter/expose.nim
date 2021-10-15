@@ -50,7 +50,7 @@ proc getLambda*(pDef: NimNode, realProcName: Nimnode = nil): NimNode =
   let
     vmArgs = ident"vmArgs"
     tmp = quote do:
-      proc n(`vmArgs`: VmArgs){.closure, gcsafe.} = discard
+      proc n(`vmArgs`: VmArgs) {.gcsafe.} = discard
 
   tmp[^1] = newStmtList()
 
@@ -104,6 +104,7 @@ proc getLambda*(pDef: NimNode, realProcName: Nimnode = nil): NimNode =
     result[^1].add newCall(procName, procArgs)
   else:
     result[^1].add newCall(procName)
+
   if pdef.params[0].kind != nnkEmpty:
     let
       retT = pDef.params[0]
