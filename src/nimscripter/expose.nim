@@ -104,6 +104,10 @@ proc getLambda*(pDef: NimNode, realProcName: Nimnode = nil): NimNode =
     result[^1].add newCall(procName, procArgs)
   else:
     result[^1].add newCall(procName)
+  let body = result[^1]
+  result[^1] = quote do:
+    {.cast(gcsafe)}:
+      `body`
 
   if pdef.params[0].kind != nnkEmpty:
     let
