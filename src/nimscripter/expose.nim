@@ -295,14 +295,16 @@ macro implNimscriptModule*(moduleName: untyped): untyped =
     let impl = generateModuleImpl(p)
     if impl.kind == nnkStmtList:
       for child in impl:
-        result.add child
+        if child.kind != nnkNilLit:
+          result.add child
     else:
-      result.add impl
+      if impl.kind != nnkNilLit:
+        result.add impl
   var addons = ""
   for (key, val) in addonsCache.pairs:
     if modulename.eqIdent(key):
       for impl in val:
         addons.add impl.repr
-        addons.setLen(addons.rfind('\n') + 1) # removes indentations
+        addons.add "\n"
   if addons.len > 0:
-    result = nnkTupleConstr.newTree(result, newLit(addons))
+    result = nnkTupleConstr.newTree(result, newLit($addons))

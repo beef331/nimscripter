@@ -1,4 +1,4 @@
-import compiler / [nimeval, renderer, ast, llstream, vmdef, vm, lineinfos, idents]
+import compiler / [nimeval, renderer, ast, llstream, vmdef, vm, lineinfos, idents, types]
 import std/[os, json, options, strutils, macros]
 import nimscripter/[expose, vmconversion]
 export destroyInterpreter, options, Interpreter, ast, lineinfos, idents
@@ -11,6 +11,11 @@ type
   VmProcNotFound* = object of CatchableError
   NimScriptFile* = distinct string
   NimScriptPath* = distinct string
+  SavedVar = object
+    name: string
+    typ: PType
+    val: Pnode
+  SaveState* = seq[SavedVar]
 
 proc getSearchPath(path: string): seq[string] =
   result.add path
@@ -64,6 +69,21 @@ proc loadScript*(
   stdPath = "./stdlib"): Option[Interpreter] {.inline.} =
   loadScript(script, [], isFile, modules = modules, stdPath = stdPath)
 
+when declared(nimeval.setGlobalValue):
+  proc saveState*(intr: Interpreter): SaveState =
+    for x in intr.exportedSymbols():
+      if x.kind in {skVar, skLet}:
+        let
+          val = intr.getGlobalValue(x)
+          typ = x.typ
+          name = x.name.s
+        result.add SavedVar(name: name, typ: typ, val: val)
+
+  proc loadState*(intr: Interpreter, state: SaveState) = 
+    for x in state:
+      let sym = intr.selectUniqueSymbol(x.name, {skLet, skVar})
+      if sym != nil and sameType(sym.typ, x.typ):
+        intr.setGlobalValue(sym, x.val)
 
 macro invoke*(intr: Interpreter, pName: untyped, args: varargs[typed],
     returnType: typedesc = void): untyped =
