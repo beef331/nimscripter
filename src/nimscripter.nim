@@ -1,4 +1,4 @@
-import compiler / [nimeval, renderer, ast, llstream, vmdef, vm, lineinfos, idents, types]
+import compiler / [nimeval, renderer, ast, llstream, lineinfos, idents, types]
 import std/[os, json, options, strutils, macros]
 import nimscripter/[expose, vmconversion]
 export destroyInterpreter, options, Interpreter, ast, lineinfos, idents

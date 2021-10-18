@@ -1,5 +1,5 @@
-import std/[macros, macrocache, typetraits, strutils]
-import compiler/[vmdef, vm, ast]
+import std/[macros, macrocache, typetraits]
+import compiler/[vmdef, vm]
 import vmconversion
 
 import procsignature
@@ -11,8 +11,8 @@ proc genSym(name: string): NimNode =
   result = ident(name & $genSymOffset)
   inc genSymOffset
 
-func deSym*(n: NimNode): NimNode =
-  # Remove all symbols
+func deSym(n: NimNode): NimNode =
+  ## Remove all symbols
   result = n
   for x in 0 .. result.len - 1:
     if result[x].kind == nnkSym:
@@ -31,8 +31,7 @@ func getMangledName*(pDef: NimNode): string =
   result.add "Comp"
 
 func getVmRuntimeImpl*(pDef: NimNode): string =
-  ## Returns the nimscript code that will convert to string and return the value.
-  ## This does the interop and where we want a serializer if we ever can.
+  ## Takes a proc definition and emits a proc with discard for the Nimscript side.
   let deSymd = deSym(pDef.copyNimTree())
   deSymd[^1] = nnkDiscardStmt.newTree(newEmptyNode())
   deSymd[^2] = nnkDiscardStmt.newTree(newEmptyNode())
@@ -75,7 +74,7 @@ proc getLambda*(pDef: NimNode, realProcName: Nimnode = nil): NimNode =
         argNum = newLit(procArgs.len)
       procArgs.add idnt
       result[^1].add quote do:
-        let reg = getReg(`vmArgs`, `argNum`)
+        let reg {.used.} = getReg(`vmArgs`, `argNum`)
         var `idnt`: `typ`
         when `typ` is (SomeOrdinal or enum):
           case reg.kind:
@@ -154,18 +153,22 @@ proc addToAddonCache(n: NimNode, moduleName: string) =
   addonsCache[moduleName] = nnkStmtList.newTree(impl)
 
 macro addToCache*(sym: typed, moduleName: static string) =
+  ## Can be used to manually add a symbol to a cache.
+  ## Otherwise used internally to add symbols to cache
   if sym.kind == nnkSym and sym.symKind in {nskType, nskConverter, nskIterator, nskMacro, nskTemplate}:
     addToAddonCache(sym, moduleName)
   else:
     addToProcCache(sym, moduleName)
 
 macro exportTo*(moduleName: untyped, procDefs: varargs[untyped]): untyped =
+  ## Takes a module name and symbols, adding them to the proper table internally.
   result = newStmtList()
   var moduleName = $moduleName
   for pDef in procDefs:
     result.add newCall("addToCache", pdef, newLit(modulename))
 
 iterator generateParamHeaders(paramList: NimNode, types: seq[(int, NimNode)], indicies: var seq[int]): NimNode =
+  ## Generates permutations of all proc headers with the given types
   var params = copyNimTree(paramList)
   while indicies[^1] < (types[^1][1].len - 1):
     for x in 0..types.high:
@@ -225,7 +228,6 @@ proc makeVMProcSignature(n: NimNode, genSym = false): NimNode =
         vmRunImpl: `runImpl`,
         vmProc: `lambda`
       )
-
 
 proc generateTypeclassProcSignatures(pDef: Nimnode): NimNode =
   result = newStmtList()
@@ -287,8 +289,9 @@ proc generateModuleImpl(n: NimNode, genSym = false): NimNode =
           result.add impls
     else: error("Some bug: " & $n.kind, n)
 
-
 macro implNimscriptModule*(moduleName: untyped): untyped =
+  ## This emits a seq[VmProcSignatures] if there are no types that require addons.
+  ## Otherwise this emits a tuple with the seq as first param and a string for addons as second.
   moduleName.expectKind(nnkIdent)
   result = nnkBracket.newNimNode()
   for p in procedureCache[$moduleName]:
