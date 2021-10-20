@@ -167,3 +167,13 @@ macro invoke*(intr: Interpreter, pName: untyped, args: varargs[typed],
           `nsCall`
       else:
         raise newException(VmProcNotFound, "'$#' was not found in the script." % `procName`)
+
+macro invoke*(intr: Option[Interpreter], pName: untyped, args: varargs[typed],
+    returnType: typedesc = void): untyped =
+  result = newCall("invoke", newCall("get", intr), pname)
+  for x in args:
+    result.add x
+  result.add nnkExprEqExpr.newTree(ident"returnType",  returnType)
+  result = quote do:
+    assert `intr`.isSome
+    `result`
