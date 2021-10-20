@@ -27,12 +27,28 @@ proc errorHook(config, info, msg, severity: auto) {.gcsafe.} =
     echo "Script Error: ", info, " ", msg
     raise (ref VMQuit)(info: info, msg: msg)
 
+when declared(nimeval.setGlobalValue):
+  proc saveState*(intr: Interpreter): SaveState =
+    for x in intr.exportedSymbols():
+      if x.kind in {skVar, skLet}:
+        let
+          val = intr.getGlobalValue(x)
+          typ = x.typ
+          name = x.name.s
+        result.add SavedVar(name: name, typ: typ, val: val)
+
+  proc loadState*(intr: Interpreter, state: SaveState) = 
+    for x in state:
+      let sym = intr.selectUniqueSymbol(x.name, {skLet, skVar})
+      if sym != nil and sameType(sym.typ, x.typ):
+        intr.setGlobalValue(sym, x.val)
+
 proc loadScript*(
   script: NimScriptFile or NimScriptPath,
   userProcs: openArray[VmProcSignature],
   additions = "",
   modules: varargs[string],
-  stdPath = "./stdlib"): Option[Interpreter] =
+  stdPath = findNimStdlibCompileTime()): Option[Interpreter] =
   const isFile = script is NimScriptPath
   if not isFile or fileExists(script.string):
     var additions = additions
@@ -62,28 +78,42 @@ proc loadScript*(
       result = option(intr)
     except: discard
 
-proc loadScript*(
+proc loadScriptWithState*(
+  intr: var Option[Interpreter],
   script: NimScriptFile or NimScriptPath,
-  isFile = true,
+  userProcs: openArray[VmProcSignature],
+  additions = "",
   modules: varargs[string],
-  stdPath = "./stdlib"): Option[Interpreter] {.inline.} =
-  loadScript(script, [], isFile, modules = modules, stdPath = stdPath)
+  stdPath = findNimStdlibCompileTime()) =
+  ## Saves state, then loads the intepreter into `intr`.
+  ## This does not keep a working intepreter if there is a script error.
+  let state = 
+    if intr.isSome:
+      intr.get.saveState()
+    else:
+      @[]
+  intr = loadScript(script, userProcs, additions, modules, stdPath)
+  if intr.isSome:
+    intr.get.loadState(state)
 
-when declared(nimeval.setGlobalValue):
-  proc saveState*(intr: Interpreter): SaveState =
-    for x in intr.exportedSymbols():
-      if x.kind in {skVar, skLet}:
-        let
-          val = intr.getGlobalValue(x)
-          typ = x.typ
-          name = x.name.s
-        result.add SavedVar(name: name, typ: typ, val: val)
-
-  proc loadState*(intr: Interpreter, state: SaveState) = 
-    for x in state:
-      let sym = intr.selectUniqueSymbol(x.name, {skLet, skVar})
-      if sym != nil and sameType(sym.typ, x.typ):
-        intr.setGlobalValue(sym, x.val)
+proc safeloadScriptWithState*(
+  intr: var Option[Interpreter],
+  script: NimScriptFile or NimScriptPath,
+  userProcs: openArray[VmProcSignature],
+  additions = "",
+  modules: varargs[string],
+  stdPath = findNimStdlibCompileTime()) =
+  ## Saves state, then loads the intepreter into `intr` if there were no script errors.
+  ## Prefers a working interpreter.
+  let state = 
+    if intr.isSome:
+      intr.get.saveState()
+    else:
+      @[]
+  let tempIntr = loadScript(script, additions, modules, stdPath)
+  if tempIntr.isSome:
+    intr = tempIntr
+    intr.loadState(state)
 
 macro invoke*(intr: Interpreter, pName: untyped, args: varargs[typed],
     returnType: typedesc = void): untyped =

@@ -14,7 +14,7 @@ type
       someIntTwo*: int
   SomeRef* = ref object
     a*: int
-  SomeEnum* = enum
+  SomeEnum* {.pure.} = enum
     a, b, c, d
   SomeVarObject* = ref object
     case kind: SomeEnum

@@ -34,3 +34,33 @@ proc testTuple*(t: ((int, int), int, int, SomeRef)) =
   assert t[1] == 200
   assert t[2] == 300
   assert t[3].a == 300
+
+proc getCharSet*(s: set[char]): set[char] = s
+proc getByteSet*(s: set[byte]): set[byte] = s
+proc getIntSet*(s: set[355..357]): set[355..357] = s
+proc getEnumSet*(s: set[SomeEnum]): set[SomeEnum] = s
+
+template makeNumTest(T: typedesc[SomeOrdinal or char or SomeFloat]) = 
+  proc `get T`*(a: T): T = a
+
+makeNumTest(char)
+makeNumTest(bool)
+makeNumTest(SomeEnum)
+
+makeNumTest(uint)
+makeNumTest(int)
+
+makeNumTest(uint8)
+makeNumTest(int8)
+
+makeNumTest(uint16)
+makeNumTest(int16)
+
+makeNumTest(uint32)
+makeNumTest(int32)
+
+makeNumTest(uint64)
+makeNumTest(int64)
+
+makeNumTest(float)
+makeNumTest(float32)

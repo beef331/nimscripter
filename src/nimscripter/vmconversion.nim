@@ -4,21 +4,30 @@ import compiler/[renderer, ast, idents]
 proc toVm*[T: enum or bool](a: T): Pnode = newIntNode(nkIntLit, a.BiggestInt)
 proc toVm*[T: char](a: T): Pnode = newIntNode(nkUInt8Lit, a.BiggestInt)
 
-proc toVm*[T: int8](a: T): Pnode = newIntNode(nkInt8Lit, a)
-proc toVm*[T: int16](a: T): Pnode = newIntNode(nkInt16Lit, a)
-proc toVm*[T: int32](a: T): Pnode = newIntNode(nkInt32Lit, a)
-proc toVm*[T: int64](a: T): Pnode = newIntNode(nkint64Lit, a)
-proc toVm*[T: int](a: T): Pnode = newIntNode(nkIntLit, a)
+proc toVm*[T: int8](a: T): Pnode = newIntNode(nkInt8Lit, a.BiggestInt)
+proc toVm*[T: int16](a: T): Pnode = newIntNode(nkInt16Lit, a.BiggestInt)
+proc toVm*[T: int32](a: T): Pnode = newIntNode(nkInt32Lit, a.BiggestInt)
+proc toVm*[T: int64](a: T): Pnode = newIntNode(nkint64Lit, a.BiggestInt)
+proc toVm*[T: int](a: T): Pnode = newIntNode(nkIntLit, a.BiggestInt)
 
-proc toVm*[T: uint8](a: T): Pnode = newIntNode(nkuInt8Lit, a)
-proc toVm*[T: uint16](a: T): Pnode = newIntNode(nkuInt16Lit, a)
-proc toVm*[T: uint32](a: T): Pnode = newIntNode(nkuInt32Lit, a)
-proc toVm*[T: uint64](a: T): Pnode = newIntNode(nkuint64Lit, a)
-proc toVm*[T: uint](a: T): Pnode = newIntNode(nkuIntLit, a)
+proc toVm*[T: uint8](a: T): Pnode = newIntNode(nkuInt8Lit, a.BiggestInt)
+proc toVm*[T: uint16](a: T): Pnode = newIntNode(nkuInt16Lit, a.BiggestInt)
+proc toVm*[T: uint32](a: T): Pnode = newIntNode(nkuInt32Lit, a.BiggestInt)
+proc toVm*[T: uint64](a: T): Pnode = newIntNode(nkuint64Lit, a.BiggestInt)
+proc toVm*[T: uint](a: T): Pnode = newIntNode(nkuIntLit, a.BiggestInt)
 
 proc toVm*[T: float32](a: T): Pnode = newFloatNode(nkFloat32Lit, BiggestFloat(a))
 proc toVm*[T: float64](a: T): Pnode = newFloatNode(nkFloat64Lit, BiggestFloat(a))
 proc toVm*[T: string](a: T): PNode = newStrNode(nkStrLit, a)
+
+proc toVm*[T](s: set[T]): PNode =
+  result = newNode(nkCurly)
+  let count = high(T).ord - low(T).ord
+  result.sons.setLen(count)
+  for val in s:
+    let offset = val.ord - low(T).ord
+    result[offset] = toVm(val)
+
 proc toVm*[T: seq](obj: T): PNode
 proc toVm*[T: tuple](obj: T): PNode
 proc toVm*[T: object](obj: T): PNode
@@ -28,7 +37,7 @@ proc extractType(typ: NimNode): NimNode =
   let impl = typ.getTypeInst
   impl[^1]
 
-proc fromVm*(t: typedesc[SomeOrdinal], node: PNode): t =
+proc fromVm*(t: typedesc[SomeOrdinal or char], node: PNode): t =
   if node.kind == nkExprColonExpr:
     t(node[1].intVal)
   else:
@@ -45,6 +54,17 @@ proc fromVm*(t: typedesc[string], node: PNode): string =
     node[1].strVal
   else:
     node.strVal
+
+proc fromVm*[T](t: typedesc[set[T]], node: Pnode): t =
+  for val in node:
+    if val != nil:
+      case val.kind
+      of nkRange:
+        for x in fromVm(T, val[0])..fromVm(T, val[1]):
+          result.incl x
+      else:
+        result.incl fromVm(T, val)
+
 
 proc fromVm*[T: object](obj: typedesc[T], vmNode: PNode): T
 proc fromVm*[T: tuple](obj: typedesc[T], vmNode: Pnode): T
@@ -205,6 +225,8 @@ proc toPnode(body, obj, vmNode: NimNode, offset: var int): NimNode =
   else: discard
 
 proc replaceGenerics(n: NimNode, genTyp: seq[(NimNode, NimNode)]) =
+  ## Replaces all instances of a typeclass with a generic type,
+  ## used in generated headers for the VM.
   for i in 0 ..< n.len:
     var x = n[i]
     if x.kind in {nnkSym, nnkIdent}:
