@@ -28,7 +28,7 @@ proc toVm*[T](s: set[T]): PNode =
     let offset = val.ord - low(T).ord
     result[offset] = toVm(val)
 
-proc toVm*[T: seq](obj: T): PNode
+proc toVm*[T: openArray](obj: T): PNode
 proc toVm*[T: tuple](obj: T): PNode
 proc toVm*[T: object](obj: T): PNode
 proc toVm*[T: ref object](obj: T): PNode
@@ -65,7 +65,6 @@ proc fromVm*[T](t: typedesc[set[T]], node: Pnode): t =
       else:
         result.incl fromVm(T, val)
 
-
 proc fromVm*[T: object](obj: typedesc[T], vmNode: PNode): T
 proc fromVm*[T: tuple](obj: typedesc[T], vmNode: Pnode): T
 proc fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): T
@@ -74,6 +73,10 @@ proc fromVm*[T](obj: typedesc[seq[T]], vmNode: Pnode): seq[T] =
   result.setLen(vmNode.sons.len)
   for i, x in vmNode.sons:
     result[i] = fromVm(T, x)
+
+proc fromVm*[Idx, T](obj: typedesc[array[Idx, T]], vmNode: Pnode): obj =
+  for i, x in vmNode:
+    result[Idx(i - obj.low.ord)] = fromVm(T, x)
 
 proc fromVm*[T: tuple](obj: typedesc[T], vmNode: Pnode): T =
   var index = 0
@@ -290,7 +293,7 @@ macro fromVmImpl[T: ref object](obj: typedesc[T], vmNode: PNode): untyped =
 proc fromVm*[T: object](obj: typedesc[T], vmNode: PNode): T = fromVmImpl(obj, vmnode)
 proc fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): T = fromVmImpl(obj, vmnode)
 
-proc toVm*[T: seq](obj: T): PNode =
+proc toVm*[T: openArray](obj: T): PNode =
   result = newNode(nkBracketExpr)
   for x in obj:
     result.add toVm(x)

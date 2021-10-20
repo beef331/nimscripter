@@ -59,6 +59,15 @@ suite("General A(fromFile)"):
     check intr.get.invoke(getByteSet, byteSet, returnType = set[byte]) == byteSet
     check intr.get.invoke(getIntSet, intSet, returnType = set[355..357]) == intSet
     check intr.get.invoke(getEnumSet, enumSet, returnType = set[SomeEnum]) == enumSet
+  
+  test("colls"):
+    const
+      arr = [1, 2, 3, 4, 5]
+      seq1 = @arr
+      seq2 = @[3, 6, 8, 9, 10]
+    check intr.get.invoke(getArray, arr, returnType = array[5, int]) == arr
+    check intr.get.invoke(getSeq, seq1, returnType = seq[int]) == seq1
+    check intr.get.invoke(getSeq, seq2, returnType = seq[int]) == seq2
 
 suite("General B(fromstring)"):
   test("save / load state"):

@@ -40,6 +40,10 @@ proc getByteSet*(s: set[byte]): set[byte] = s
 proc getIntSet*(s: set[355..357]): set[355..357] = s
 proc getEnumSet*(s: set[SomeEnum]): set[SomeEnum] = s
 
+proc getArray*(a: array[5, int]): array[5, int] = a
+proc getSeq*(a: seq[int]): seq[int] = a
+
+
 template makeNumTest(T: typedesc[SomeOrdinal or char or SomeFloat]) = 
   proc `get T`*(a: T): T = a
 
