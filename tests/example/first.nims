@@ -42,6 +42,7 @@ proc getEnumSet*(s: set[SomeEnum]): set[SomeEnum] = s
 
 proc getArray*(a: array[5, int]): array[5, int] = a
 proc getSeq*(a: seq[int]): seq[int] = a
+proc getString*(s: string): string = s
 
 
 template makeNumTest(T: typedesc[SomeOrdinal or char or SomeFloat]) = 

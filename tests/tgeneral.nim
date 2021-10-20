@@ -40,15 +40,6 @@ suite("General A(fromFile)"):
     check intr.get.invoke(getbool, true, returnType = bool) == true
     check intr.get.invoke(getSomeEnum, a, returnType = SomeEnum) == a
 
-  test("Object tests"):
-    let res = intr.get.invoke(fromJson, returnType = JsonNode)
-    check $res == """{"someInt":300,"someBool":true,"someString":"heel ya","secondaryBool":true,"someOtherString":"Really cool?"}"""
-    intr.get.invoke(testObj, ComplexObject(someBool: false, someInt: 320, someintTwo: 42))
-    intr.get.invoke(test, 10, 20d, returnType = void)
-    intr.get.invoke(testTuple, ((100, 200), 200, 300, SomeRef(a: 300)))
-    intr.get.invoke(recObj, RecObject(next: RecObject(), b: {"hello": "world"}.toTable))
-    intr.get.invoke(testJson, %* compl)
-
   test("sets"):
     const
       charSet = {'a'..'z', '0'}
@@ -65,9 +56,22 @@ suite("General A(fromFile)"):
       arr = [1, 2, 3, 4, 5]
       seq1 = @arr
       seq2 = @[3, 6, 8, 9, 10]
+      str1 = "Hello"
+      str2 = "world"
     check intr.get.invoke(getArray, arr, returnType = array[5, int]) == arr
     check intr.get.invoke(getSeq, seq1, returnType = seq[int]) == seq1
     check intr.get.invoke(getSeq, seq2, returnType = seq[int]) == seq2
+    check intr.get.invoke(getString, str1, returnType = string) == str1
+    check intr.get.invoke(getString, str2, returnType = string) == str2
+
+  test("Object tests"):
+    let res = intr.get.invoke(fromJson, returnType = JsonNode)
+    check $res == """{"someInt":300,"someBool":true,"someString":"heel ya","secondaryBool":true,"someOtherString":"Really cool?"}"""
+    intr.get.invoke(testObj, ComplexObject(someBool: false, someInt: 320, someintTwo: 42))
+    intr.get.invoke(test, 10, 20d, returnType = void)
+    intr.get.invoke(testTuple, ((100, 200), 200, 300, SomeRef(a: 300)))
+    intr.get.invoke(recObj, RecObject(next: RecObject(), b: {"hello": "world"}.toTable))
+    intr.get.invoke(testJson, %* compl)
 
 suite("General B(fromstring)"):
   test("save / load state"):
