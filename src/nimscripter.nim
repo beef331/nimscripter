@@ -1,7 +1,7 @@
 import compiler / [nimeval, renderer, ast, llstream, lineinfos, idents, types]
 import std/[os, json, options, strutils, macros]
 import nimscripter/[expose, vmconversion]
-export destroyInterpreter, options, Interpreter, ast, lineinfos, idents
+export destroyInterpreter, options, Interpreter, ast, lineinfos, idents, nimEval
 
 import nimscripter/procsignature
 
@@ -16,6 +16,7 @@ type
     typ: PType
     val: Pnode
   SaveState* = seq[SavedVar]
+  Interpreters* = Option[Interpreter]
 
 proc getSearchPath(path: string): seq[string] =
   result.add path
@@ -114,6 +115,13 @@ proc safeloadScriptWithState*(
   if tempIntr.isSome:
     intr = tempIntr
     intr.loadState(state)
+
+proc getGlobalVariable*[T](intr: Option[Interpreter] or Interpreter, name: string): T = 
+  when intr is Option:
+    assert intr.isSome
+    let intr = intr.get
+  fromVm(T, intr.getGlobalValue(intr.selectUniqueSymbol(name)))
+
 
 macro invoke*(intr: Interpreter, pName: untyped, args: varargs[typed],
     returnType: typedesc = void): untyped =

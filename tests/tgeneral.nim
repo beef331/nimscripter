@@ -1,7 +1,6 @@
 import nimscripter
 import nimscripter/[expose, vmconversion]
 import example/objects
-import compiler/nimeval
 import std/[json, unittest]
 suite("General A(fromFile)"):
   var compl: ComplexObject
@@ -18,9 +17,7 @@ suite("General A(fromFile)"):
     RecObject,
     SomeEnum
   )
-  const
-    (testProc, additions) = implNimscriptModule(test)
-    stdlib = findNimStdlibCompileTime()
+  const (testProc, additions) = implNimscriptModule(test)
   let intr = loadScript(NimScriptPath("tests/example/first.nims"), testProc, additions = additions, modules = ["tables"])
 
   test("nums"):
@@ -67,14 +64,9 @@ suite("General B(fromstring)"):
   test("save / load state"):
     const file = "var someVal* = 52\nproc setVal* = someVal = 32"
     var intr = loadScript(NimScriptFile(file), @[])
-    let state = intr.get.saveState()
 
-    check fromVm(int, intr.get.getGlobalValue(intr.get.selectUniqueSymbol("someVal"))) == 52
-
+    check intr.getGlobalVariable[: int]("someVal") == 52
     intr.get.invoke(setVal)
-
-    check fromVm(int, intr.get.getGlobalValue(intr.get.selectUniqueSymbol("someVal"))) == 32
-
+    check intr.getGlobalVariable[: int]("someVal") == 32
     intr.loadScriptWithState(NimScriptFile(file), @[])
-
-    check fromVm(int, intr.get.getGlobalValue(intr.get.selectUniqueSymbol("someVal"))) == 32
+    check intr.getGlobalVariable[: int]("someVal") == 32
