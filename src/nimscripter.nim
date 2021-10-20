@@ -9,6 +9,7 @@ type
   VMQuit* = object of CatchableError
     info*: TLineInfo
   VmProcNotFound* = object of CatchableError
+  VmSymNotFound* = object of CatchableError
   NimScriptFile* = distinct string
   NimScriptPath* = distinct string
   SavedVar = object
@@ -120,7 +121,12 @@ proc getGlobalVariable*[T](intr: Option[Interpreter] or Interpreter, name: strin
   when intr is Option:
     assert intr.isSome
     let intr = intr.get
-  fromVm(T, intr.getGlobalValue(intr.selectUniqueSymbol(name)))
+  let sym = intr.selectUniqueSymbol(name)
+  if sym != nil:
+    fromVm(T, intr.getGlobalValue(sym))
+  else:
+    raise newException(VmSymNotFound, name & " is not a global symbol in the script.")
+
 
 
 macro invoke*(intr: Interpreter, pName: untyped, args: varargs[typed],
