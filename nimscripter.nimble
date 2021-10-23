@@ -10,3 +10,4 @@ srcDir        = "src"
 # Dependencies
 # Due to umoving compiler/nim target this is smartest I think
 requires "nim >= 1.5.1"
+requires "https://github.com/disruptek/assume >= 0.3.0"

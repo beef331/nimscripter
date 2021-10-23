@@ -1,6 +1,6 @@
 import std/[macros, macrocache, sugar, typetraits, importutils]
 import compiler/[renderer, ast, idents]
-
+import assume/typeit
 proc toVm*[T: enum or bool](a: T): Pnode = newIntNode(nkIntLit, a.BiggestInt)
 proc toVm*[T: char](a: T): Pnode = newIntNode(nkUInt8Lit, a.BiggestInt)
 
@@ -318,26 +318,21 @@ macro toVMImpl[T: object](obj: T): PNode =
     result.insert 1 + x, quote do:
       `pnode`.add newNode(nkEmpty)
 
-proc toVm*[T: object](obj: T): PNode = toVMImpl(obj)
+proc toVm*[T: object](obj: T): PNode =
+  result = newNode(nkObjConstr)
+  echo obj.fieldCount()
+  result.sons.setLen(obj.fieldCount() + 1)
+  echo T
+  var i = 1
+  typeIt(obj, {}):
+    result[i] = newNode(nkExprColonExpr)
+    result[i].add newNode(nkEmpty)
+    result[i].add toVm(it)
+    inc i
 
-macro toVMImpl[T: ref object](obj: T): PNode =
-  let pnode = genSym(nskVar, "node")
-  var recList = obj.getTypeImpl[^1]
-  if recList.kind == nnkSym:
-    reclist = recList.getTypeImpl[^1]
-  result = newStmtList()
-  result.add quote do:
-    privateAccess(typeof(`obj`))
-    var `pnode` = newNode(nkObjConstr)
-  var offset = 1
-  result.add toPnode(recList, obj, pnode, offset)
-  result.add pnode
-  for x in 0..<offset:
-    result.insert 1, quote do:
-      `pnode`.add newNode(nkEmpty)
 
 proc toVm*[T: ref object](obj: T): PNode =
   if obj.isNil:
     newNode(nkNilLit)
   else:
-    toVMImpl(obj)
+    toVM(obj[])

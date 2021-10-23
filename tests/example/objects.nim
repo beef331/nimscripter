@@ -1,6 +1,6 @@
 import std/tables
 export tables
-type 
+type
   ComplexObject* = object
     someInt*: int
     case someBool*: bool
