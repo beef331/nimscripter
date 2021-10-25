@@ -1,5 +1,4 @@
 import nimscripter
-import nimscripter/[expose, vmconversion]
 import example/objects
 import std/[json, unittest]
 suite("General A(fromFile)"):

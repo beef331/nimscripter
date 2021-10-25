@@ -1,62 +1,31 @@
 # Nimscripter
 Nimscripter is enables easy interop between Nim and Nimscript for realtime scriptable applications.
 
-[Video Explanation](https://www.youtube.com/watch?v=GXBxvtHDjbg)
 ## How to use
-Install Nimscripter with Nimble then create a .nim file and .nims file.
-
-Make a folder entitled `stdlib` and copy all Nim files you wish to ship as a stdlib from Nim's stdlib and or any of your own files.`system.nim` and the `system` folder are required, but you can copy any other pure libraries and ship them, though they're only usable if they support Nimscript. If you use choosenim you can find the the Nim stdlib to copy from inside `~/.choosenim/toolchains/nim-version/lib`.
-
-An example of the shipped stdlib is in the root directory of this repo.
+Install Nimscripter(`nimble install nimscripter`) with Nimble then create a .nim file and .nims file.
 
 ```nim
-#Below is code to be  in the .nim file
-import nimscripter/nimscripted #Where the macros come from
-proc doThing(): int {.exportToScript.} = 42 #Will create a `doThing` proc in Nimscript
-import nimscripter #Must appear after any wanted nimscript procs
-let intr = loadScript("script.nims")
+import nimscripter
+proc doThing(): int = 42
+exportTo(myImpl, doThing) # The name of our "nimscript module" is `myImpl`
+const 
+  scriptProcs = implNimScriptModule(myImpl) # This emits a list of our exported code
+  ourScript = NimScriptFile"assert doThing() == 42" # Convert to `NimScriptFile` for loading from strings
+let intr = loadScript(ourScript, scriptProcs) # Load our script with our code and using our system `stdlib`(not portable)
 ```
-```nim
-#Code below is inside the Nimscript file
-assert doThing() == 42
-```
-When compiled with `-d:scripted` the assertion will be ran and no issue found.
 
-Compiling with `-d:debugScript` will output the constructed Nimscript for easier debugging in expansion of this package.
 
 ### Calling code from Nim
-Inside Nimscript the `exportToNim` macro can be applied to procs to enable calling from Nim, the following code will demonstrate how.
+Any exported non overloaded and non generic procedures can be called from Nim
 ```nim
-#.nim file below
-import nimscripter
-let intr = loadscript("script.nims")
-var buf = ""
-10.addToBuffer(buff)
-if intr.isSome:
-  intr.get.invoke("fancyStuff", buff, void) #Void is the return type
+  const script = NimScriptFile"proc fancyStuff*(a: int) = assert a in [10, 300]" # Notice `fancyStuff` is exported
+  let intr = loadScript(script, []) # We are not exposing any procedures hence `[]`
+  intr.invoke(fancyStuff, 10) # Calls `fancyStuff(10)` in vm
+  intr.invoke(fancyStuff, 300) # Calls `fancyStuff(300)` in vm
 ```
-```nim
-#Nimscript file
-proc fancyStuff(a: int) {.exportToNim}= assert a == 10
-```
+### Using a custom/shipped stdlib
 
-### Appending Code To Nimscript
-You can either write modules to import or use the `exportCode` macro to send code to Nimscript. The code is included as is to Nimscript and not ran in Nim.
-```nim
-#.nim file
-import nimscripter/nimscripted
-exportCode:
-  type Awbject = object
-    a, b, c: int
-
-  proc `+`(a, b: Awbject): Awbject =
-    result.a = a.a + b.a
-    result.b = a.b + b.b
-    result.c = a.c + b.c
-```
-```nim
-#Nimscript file
-var 
-  one = Awbject(a: 10, b: 20, c: 30)
-  two = Awbject(a: 12, b: 15, c: 52)
-assert Awbject(a: 22, b: 35, c: 82) == one + two
+Make a folder entitled `stdlib` and copy all Nim files you wish to ship as a stdlib from Nim's stdlib and any of your own files.
+`system.nim` and the `system` folder are required.
+`You can copy any other pure libraries and ship them, though they're only usable if they support Nimscript.
+`If you use choosenim you can find the the Nim stdlib to copy from inside `~/.choosenim/toolchains/nim-version/lib`.

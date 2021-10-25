@@ -2,7 +2,7 @@ import compiler / [nimeval, renderer, ast, llstream, lineinfos, idents, types]
 import std/[os, json, options, strutils, macros]
 import nimscripter/[expose, vmconversion]
 from compiler/vmdef import TSandboxFlag
-export options, Interpreter, ast, lineinfos, idents, nimEval
+export options, Interpreter, ast, lineinfos, idents, nimEval, expose
 
 import nimscripter/procsignature
 
