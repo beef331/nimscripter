@@ -1,6 +1,7 @@
 import compiler / [nimeval, renderer, ast, llstream, lineinfos, idents, types]
 import std/[os, json, options, strutils, macros]
 import nimscripter/[expose, vmconversion]
+from compiler/vmdef import TSandboxFlag
 export destroyInterpreter, options, Interpreter, ast, lineinfos, idents, nimEval
 
 import nimscripter/procsignature
@@ -67,7 +68,7 @@ proc loadScript*(
       searchPaths.add script.string.parentDir
 
     let
-      intr = createInterpreter(scriptName, searchPaths)
+      intr = createInterpreter(scriptName, searchPaths, flags = {allowInfiniteLoops})
       script = when isFile: readFile(script.string) else: script.string
 
     for uProc in userProcs:

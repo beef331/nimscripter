@@ -178,55 +178,6 @@ proc parseObject(body, vmNode, baseType: NimNode, offset: var int): NimNode =
   var fields: seq[NimNode]
   result = parseObject(body, vmNode, baseType, offset, fields)
 
-
-proc toPnode(body, obj, vmNode: NimNode, offset: var int): NimNode =
-  ## Emits a constructor based off the type, works for variants and normal objects
-
-  template stmtlistAdd(body: NimNode) =
-    if result.kind == nnkNilLit:
-      result = body
-    elif result.kind != nnkStmtList:
-      result = newStmtList(result, body)
-    else:
-      result.add body
-
-  case body.kind
-  of nnkRecList:
-    for defs in body:
-      stmtlistAdd toPnode(defs, obj, vmNode, offset)
-    if body.len == 0:
-      stmtlistAdd nnkDiscardStmt.newTree(newEmptyNode())
-  of nnkIdentDefs:
-    for def in body[0..^3]:
-      let name = ident($def.baseSym)
-      stmtlistAdd quote do:
-        `vmNode`[`offset`] = newNode(nkExprColonExpr)
-        `vmNode`[`offset`].add newNode(nkEmpty)
-        `vmNode`[`offset`].add toVm(`obj`.`name`)
-      inc offset
-  of nnkRecCase:
-    let descrimName = ident($body[0][0].baseSym)
-    stmtlistAdd quote do:
-      `vmNode`[`offset`] = newNode(nkExprColonExpr)
-      `vmNode`[`offset`].add newNode(nkEmpty)
-      `vmNode`[`offset`].add toVm(`obj`.`descrimName`)
-
-    inc offset
-    let caseStmt = nnkCaseStmt.newTree(newDotExpr(obj, descrimName))
-    for subDefs in body[1..^1]:
-      caseStmt.add toPnode(subDefs, obj, vmNode, offset)
-    stmtlistAdd caseStmt
-  of nnkOfBranch:
-    let
-      conditions = body[0]
-      ofBody = toPnode(body[1], obj, vmNode, offset)
-    stmtlistAdd body.kind.newTree(conditions, ofBody)
-  of nnkElse:
-    stmtlistAdd nnkElse.newTree(toPnode(body[0], obj, vmNode, offset))
-  of nnkNilLit:
-    stmtlistAdd nnkDiscardStmt.newTree(newEmptyNode())
-  else: discard
-
 proc replaceGenerics(n: NimNode, genTyp: seq[(NimNode, NimNode)]) =
   ## Replaces all instances of a typeclass with a generic type,
   ## used in generated headers for the VM.
@@ -303,33 +254,18 @@ proc toVm*[T: tuple](obj: T): PNode =
   for x in obj.fields:
     result.add toVm(x)
 
-macro toVMImpl[T: object](obj: T): PNode =
-  let
-    pnode = genSym(nskVar, "node")
-    recList = obj.getTypeImpl[^1]
-  result = newStmtList()
-  result.add quote do:
-    privateAccess(typeof(`obj`))
-    var `pnode` = newNode(nkObjConstr)
-  var offset = 1
-  result.add toPnode(recList, obj, pnode, offset)
-  result.add pnode
-  for x in 0..offset:
-    result.insert 1 + x, quote do:
-      `pnode`.add newNode(nkEmpty)
-
 proc toVm*[T: object](obj: T): PNode =
   result = newNode(nkObjConstr)
-  echo obj.fieldCount()
-  result.sons.setLen(obj.fieldCount() + 1)
-  echo T
+  result.add newNode(nkEmpty)
+  typeit(obj, {titAllFields}):
+    result.add newNode(nkEmpty)
   var i = 1
-  typeIt(obj, {}):
-    result[i] = newNode(nkExprColonExpr)
-    result[i].add newNode(nkEmpty)
-    result[i].add toVm(it)
+  typeIt(obj, {titAllFields, titDeclaredOrder}):
+    if it.isAccessible:
+      result[i] = newNode(nkExprColonExpr)
+      result[i].add newNode(nkEmpty)
+      result[i].add toVm(it)
     inc i
-
 
 proc toVm*[T: ref object](obj: T): PNode =
   if obj.isNil:
