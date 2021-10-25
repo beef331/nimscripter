@@ -2,7 +2,7 @@ import compiler / [nimeval, renderer, ast, llstream, lineinfos, idents, types]
 import std/[os, json, options, strutils, macros]
 import nimscripter/[expose, vmconversion]
 from compiler/vmdef import TSandboxFlag
-export destroyInterpreter, options, Interpreter, ast, lineinfos, idents, nimEval
+export options, Interpreter, ast, lineinfos, idents, nimEval
 
 import nimscripter/procsignature
 
@@ -11,14 +11,13 @@ type
     info*: TLineInfo
   VmProcNotFound* = object of CatchableError
   VmSymNotFound* = object of CatchableError
-  NimScriptFile* = distinct string
-  NimScriptPath* = distinct string
+  NimScriptFile* = distinct string ## Distinct to load from string
+  NimScriptPath* = distinct string ## Distinct to load from path
   SavedVar = object
     name: string
     typ: PType
     val: Pnode
   SaveState* = seq[SavedVar]
-  Interpreters* = Option[Interpreter]
 
 proc getSearchPath(path: string): seq[string] =
   result.add path
@@ -52,6 +51,12 @@ proc loadScript*(
   additions = "",
   modules: varargs[string],
   stdPath = findNimStdlibCompileTime()): Option[Interpreter] =
+  ## Loads an interpreter from a file or from string, with given addtions and userprocs.
+  ## To load from the filesystem use `NimScriptPath(yourPath)`.
+  ## To load from a string use `NimScriptFile(yourFile)`.
+  ## `userProcs` are the Procs you'd like to override got from `implNimscriptModule`
+  ## `modules` implict imports to add to the module.
+  ## `stdPath` to use shipped path instead of finding it at compile time.
   const isFile = script is NimScriptPath
   if not isFile or fileExists(script.string):
     var additions = additions
@@ -88,7 +93,7 @@ proc loadScriptWithState*(
   additions = "",
   modules: varargs[string],
   stdPath = findNimStdlibCompileTime()) =
-  ## Saves state, then loads the intepreter into `intr`.
+  ## Same as loadScript, but saves state, then loads the intepreter into `intr`.
   ## This does not keep a working intepreter if there is a script error.
   let state = 
     if intr.isSome:
@@ -106,8 +111,8 @@ proc safeloadScriptWithState*(
   additions = "",
   modules: varargs[string],
   stdPath = findNimStdlibCompileTime()) =
-  ## Saves state, then loads the intepreter into `intr` if there were no script errors.
-  ## Prefers a working interpreter.
+  ## Same as loadScriptWithState but saves state then loads the intepreter into `intr` if there were no script errors.
+  ## Tries to keep the interpreter running.
   let state = 
     if intr.isSome:
       intr.get.saveState()
@@ -118,7 +123,8 @@ proc safeloadScriptWithState*(
     intr = tempIntr
     intr.loadState(state)
 
-proc getGlobalVariable*[T](intr: Option[Interpreter] or Interpreter, name: string): T = 
+proc getGlobalVariable*[T](intr: Option[Interpreter] or Interpreter, name: string): T =
+  ## Easy access of a global nimscript variable
   when intr is Option:
     assert intr.isSome
     let intr = intr.get
@@ -131,7 +137,9 @@ proc getGlobalVariable*[T](intr: Option[Interpreter] or Interpreter, name: strin
 
 
 macro invoke*(intr: Interpreter, pName: untyped, args: varargs[typed],
-    returnType: typedesc = void): untyped =
+  returnType: typedesc = void): untyped =
+  ## Calls a nimscript function named `pName`, passing the `args`
+  ## Converts the returned value to `returnType`
   let
     convs = newStmtList()
     procName = newLit($pname)
@@ -177,6 +185,7 @@ macro invoke*(intr: Interpreter, pName: untyped, args: varargs[typed],
 
 macro invoke*(intr: Option[Interpreter], pName: untyped, args: varargs[typed],
     returnType: typedesc = void): untyped =
+  ## Invoke but takes an option and unpacks it, if `intr.`isNone, assertion is raised
   result = newCall("invoke", newCall("get", intr), pname)
   for x in args:
     result.add x
