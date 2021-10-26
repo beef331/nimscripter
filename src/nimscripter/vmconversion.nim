@@ -1,6 +1,10 @@
 import std/[macros, macrocache, sugar, typetraits, importutils]
 import compiler/[renderer, ast, idents]
 import assume/typeit
+
+type
+  VMParseError* = object of CatchableError ## Error raised when an object cannot be parsed.
+
 proc toVm*[T: enum or bool](a: T): Pnode = newIntNode(nkIntLit, a.BiggestInt)
 proc toVm*[T: char](a: T): Pnode = newIntNode(nkUInt8Lit, a.BiggestInt)
 
@@ -33,56 +37,72 @@ proc toVm*[T: tuple](obj: T): PNode
 proc toVm*[T: object](obj: T): PNode
 proc toVm*[T: ref object](obj: T): PNode
 
+template raiseParseError(t: typedesc): untyped =
+  raise newException(VMParseError, "Cannot convert to: " & $t)
+
 proc extractType(typ: NimNode): NimNode =
   let impl = typ.getTypeInst
   impl[^1]
 
+const intLits = {nkCharLit..nkUInt64Lit}
 proc fromVm*(t: typedesc[SomeOrdinal or char], node: PNode): t =
-  if node.kind == nkExprColonExpr:
-    t(node[1].intVal)
-  else:
+  if node.kind in intLits:
     t(node.intVal)
+  else:
+    raiseParseError(t)
 
 proc fromVm*(t: typedesc[SomeFloat], node: PNode): t =
-  if node.kind == nkExprColonExpr:
-    t(node[1].floatVal)
-  else:
+  if node.kind in nkFloatLiterals:
     t(node.floatVal)
+  else:
+    raiseParseError(t)
 
 proc fromVm*(t: typedesc[string], node: PNode): string =
-  if node.kind == nkExprColonExpr:
-    node[1].strVal
-  else:
+  if node.kind == nkStrLit:
     node.strVal
+  else:
+    raiseParseError(t)
 
 proc fromVm*[T](t: typedesc[set[T]], node: Pnode): t =
-  for val in node:
-    if val != nil:
-      case val.kind
-      of nkRange:
-        for x in fromVm(T, val[0])..fromVm(T, val[1]):
-          result.incl x
-      else:
-        result.incl fromVm(T, val)
+  if node.kind == nkCurly:
+    for val in node:
+      if val != nil:
+        case val.kind
+        of nkRange:
+          for x in fromVm(T, val[0])..fromVm(T, val[1]):
+            result.incl x
+        else:
+          result.incl fromVm(T, val)
+  else:
+    raiseParseError(set[T])
 
 proc fromVm*[T: object](obj: typedesc[T], vmNode: PNode): T
 proc fromVm*[T: tuple](obj: typedesc[T], vmNode: Pnode): T
 proc fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): T
 
 proc fromVm*[T](obj: typedesc[seq[T]], vmNode: Pnode): seq[T] =
-  result.setLen(vmNode.sons.len)
-  for i, x in vmNode.sons:
-    result[i] = fromVm(T, x)
+  if vmNode.kind in {nkBracket, nkBracketExpr}:
+    result.setLen(vmNode.sons.len)
+    for i, x in vmNode.sons:
+      result[i] = fromVm(T, x)
+  else:
+    raiseParseError(seq[T])
 
 proc fromVm*[Idx, T](obj: typedesc[array[Idx, T]], vmNode: Pnode): obj =
-  for i, x in vmNode:
-    result[Idx(i - obj.low.ord)] = fromVm(T, x)
+  if vmNode.kind in {nkBracket, nkBracketExpr}:
+    for i, x in vmNode:
+      result[Idx(i - obj.low.ord)] = fromVm(T, x)
+  else:
+    raiseParseError(array[Idx, T])
 
 proc fromVm*[T: tuple](obj: typedesc[T], vmNode: Pnode): T =
-  var index = 0
-  for x in result.fields:
-    x = fromVm(typeof(x), vmNode[index])
-    inc index
+  if vmNode.kind == nkTupleConstr:
+    var index = 0
+    for x in result.fields:
+      x = fromVm(typeof(x), vmNode[index])
+      inc index
+  else:
+    raiseParseError(T)
 
 proc hasRecCase(n: NimNode): bool =
   for son in n:
@@ -241,8 +261,17 @@ macro fromVmImpl[T: ref object](obj: typedesc[T], vmNode: PNode): untyped =
     else:
       `result`
 
-proc fromVm*[T: object](obj: typedesc[T], vmNode: PNode): T = fromVmImpl(obj, vmnode)
-proc fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): T = fromVmImpl(obj, vmnode)
+proc fromVm*[T: object](obj: typedesc[T], vmNode: PNode): T =
+  if vmNode.kind == nkObjConstr:
+    fromVmImpl(obj, vmnode)
+  else:
+    raiseParseError(T)
+
+proc fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): T =
+  if vmNode.kind in {nkObjConstr, nkNilLit}:
+    fromVmImpl(obj, vmnode)
+  else:
+    raiseParseError(T)
 
 proc toVm*[T: openArray](obj: T): PNode =
   result = newNode(nkBracketExpr)

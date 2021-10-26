@@ -2,7 +2,7 @@ import compiler / [nimeval, renderer, ast, llstream, lineinfos, idents, types]
 import std/[os, json, options, strutils, macros]
 import nimscripter/[expose, vmaddins, vmconversion]
 from compiler/vmdef import TSandboxFlag
-export options, Interpreter, ast, lineinfos, idents, nimEval, expose
+export options, Interpreter, ast, lineinfos, idents, nimEval, expose, VMParseError
 
 type
   VMQuit* = object of CatchableError
@@ -82,7 +82,7 @@ proc loadScript*(
       additions.add addins.postCodeAdditions
       intr.evalScript(llStreamOpen(additions))
       result = option(intr)
-    except: discard
+    except VMQuit: discard
 
 proc loadScriptWithState*(
   intr: var Option[Interpreter],
@@ -121,7 +121,7 @@ proc safeloadScriptWithState*(
 
 proc getGlobalVariable*[T](intr: Option[Interpreter] or Interpreter, name: string): T =
   ## Easy access of a global nimscript variable
-  when intr is Option:
+  when intr is Option[Interpreter]:
     assert intr.isSome
     let intr = intr.get
   let sym = intr.selectUniqueSymbol(name)

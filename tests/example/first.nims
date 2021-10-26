@@ -1,5 +1,5 @@
 import json
-let a = ComplexObject(
+let a* = ComplexObject(
   someInt: 300,
   someBool: true,
   someString: "heel ya",
