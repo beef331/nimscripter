@@ -51,7 +51,7 @@ proc loadScript*(
   ## Loads an interpreter from a file or from string, with given addtions and userprocs.
   ## To load from the filesystem use `NimScriptPath(yourPath)`.
   ## To load from a string use `NimScriptFile(yourFile)`.
-  ## `userProcs` are the Procs you'd like to override got from `implNimscriptModule`
+  ## `addins` is the overrided procs/addons from `impleNimScriptModule
   ## `modules` implict imports to add to the module.
   ## `stdPath` to use shipped path instead of finding it at compile time.
   const isFile = script is NimScriptPath
