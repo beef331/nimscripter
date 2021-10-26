@@ -2,8 +2,8 @@ import std/[macros, macrocache, typetraits]
 import compiler/[vmdef, vm]
 import vmconversion
 
-import procsignature
-export VmProcSignature
+import vmaddins
+export VMAddins
 
 var genSymOffset {.compileTime.} = 321321
 
@@ -125,6 +125,7 @@ proc getLambda*(pDef: NimNode, realProcName: Nimnode = nil): NimNode =
 const
   procedureCache = CacheTable"NimscriptProcedures"
   addonsCache = CacheTable"NimscriptAddons"
+  checksCache = CacheTable"NimscriptProcChecks"
 
 proc addToProcCache(n: NimNode, moduleName: string) =
   var impl: NimNode
@@ -166,6 +167,14 @@ macro exportTo*(moduleName: untyped, procDefs: varargs[untyped]): untyped =
   var moduleName = $moduleName
   for pDef in procDefs:
     result.add newCall("addToCache", pdef, newLit(modulename))
+
+macro addCallable*(moduleName: untyped, body: typed{nkProcDef}) =
+  block searchAdd:
+    for k, v in checksCache:
+      if k.eqIdent(moduleName):
+        v.add body
+        break searchAdd
+    checksCache[$moduleName] =  newStmtList(moduleName, body)
 
 iterator generateParamHeaders(paramList: NimNode, types: seq[(int, NimNode)], indicies: var seq[int]): NimNode =
   ## Generates permutations of all proc headers with the given types
@@ -289,9 +298,30 @@ proc generateModuleImpl(n: NimNode, genSym = false): NimNode =
           result.add impls
     else: error("Some bug: " & $n.kind, n)
 
+proc getProcChecks(moduleName: NimNode): string =
+  for key, val in checksCache:
+    if key.eqIdent(moduleName):
+      for x in val[1..^1]:
+        let
+          name = x[0]
+          p = copyNimTree(x)
+        p[0] = newEmptyNode()
+        let
+          strName = $name
+          procStrType = p.repr
+          declaredCheck = quote do:
+            when not declared(`name`):
+              {.error: `strName` & " is not declared, but is required for this nimscript program".}
+            elif `name` isnot `p`:
+              {.error: `strName` & " should be of type `" & `procStrType` & "`.".}
+        result.add "\n"
+        result.add declaredCheck.repr
+        result.add "\n"
+
+
+
 macro implNimscriptModule*(moduleName: untyped): untyped =
-  ## This emits a seq[VmProcSignatures] if there are no types that require addons.
-  ## Otherwise this emits a tuple with the seq as first param and a string for addons as second.
+  ## This emits a `VMAddins`, which can be used to pass to the `loadScript` proc.
   moduleName.expectKind(nnkIdent)
   result = nnkBracket.newNimNode()
   for p in procedureCache[$moduleName]:
@@ -309,5 +339,8 @@ macro implNimscriptModule*(moduleName: untyped): untyped =
       for impl in val:
         addons.add impl.repr
         addons.add "\n"
-  if addons.len > 0:
-    result = nnkTupleConstr.newTree(result, newLit($addons))
+  let
+    procChecks = getProcChecks(moduleName)
+    procSeq = prefix(result, "@")
+  result = quote do:
+    VMAddins(procs: `procSeq`, additions: `addons`, postCodeAdditions: `procChecks`)

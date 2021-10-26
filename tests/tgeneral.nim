@@ -16,8 +16,8 @@ suite("General A(fromFile)"):
     RecObject,
     SomeEnum
   )
-  const (testProc, additions) = implNimscriptModule(test)
-  let intr = loadScript(NimScriptPath("tests/example/first.nims"), testProc, additions = additions, modules = ["tables"])
+  const addins = implNimscriptModule(test)
+  let intr = loadScript(NimScriptPath("tests/example/first.nims"), addins, modules = ["tables"])
 
   test("nums"):
     check intr.invoke(getuint8, 128u8, returnType = uint8) == 128u8
@@ -75,10 +75,10 @@ suite("General A(fromFile)"):
 suite("General B(fromstring)"):
   test("save / load state"):
     const file = "var someVal* = 52\nproc setVal* = someVal = 32"
-    var intr = loadScript(NimScriptFile(file), @[])
+    var intr = loadScript(NimScriptFile(file))
 
     check intr.getGlobalVariable[: int]("someVal") == 52
     intr.invoke(setVal)
     check intr.getGlobalVariable[: int]("someVal") == 32
-    intr.loadScriptWithState(NimScriptFile(file), @[])
+    intr.loadScriptWithState(NimScriptFile(file))
     check intr.getGlobalVariable[: int]("someVal") == 32

@@ -1,10 +1,8 @@
 import compiler / [nimeval, renderer, ast, llstream, lineinfos, idents, types]
 import std/[os, json, options, strutils, macros]
-import nimscripter/[expose, vmconversion]
+import nimscripter/[expose, vmaddins, vmconversion]
 from compiler/vmdef import TSandboxFlag
 export options, Interpreter, ast, lineinfos, idents, nimEval, expose
-
-import nimscripter/procsignature
 
 type
   VMQuit* = object of CatchableError
@@ -47,8 +45,7 @@ when declared(nimeval.setGlobalValue):
 
 proc loadScript*(
   script: NimScriptFile or NimScriptPath,
-  userProcs: openArray[VmProcSignature],
-  additions = "",
+  addins: VMAddins = VMaddins(),
   modules: varargs[string],
   stdPath = findNimStdlibCompileTime()): Option[Interpreter] =
   ## Loads an interpreter from a file or from string, with given addtions and userprocs.
@@ -59,11 +56,11 @@ proc loadScript*(
   ## `stdPath` to use shipped path instead of finding it at compile time.
   const isFile = script is NimScriptPath
   if not isFile or fileExists(script.string):
-    var additions = additions
+    var additions = addins.additions
     for `mod` in modules: # Add modules
       additions.insert("import " & `mod` & "\n", 0)
 
-    for uProc in userProcs:
+    for uProc in addins.procs:
       additions.add uProc.vmRunImpl
 
     var searchPaths = getSearchPath(stdPath)
@@ -76,21 +73,21 @@ proc loadScript*(
       intr = createInterpreter(scriptName, searchPaths, flags = {allowInfiniteLoops})
       script = when isFile: readFile(script.string) else: script.string
 
-    for uProc in userProcs:
+    for uProc in addins.procs:
       intr.implementRoutine("*", scriptName, uProc.name, uProc.vmProc)
 
-    when defined(debugScript): writeFile("debugScript.nims", additions & script)
     intr.registerErrorHook(errorHook)
     try:
-      intr.evalScript(llStreamOpen(additions & script))
+      additions.add script
+      additions.add addins.postCodeAdditions
+      intr.evalScript(llStreamOpen(additions))
       result = option(intr)
     except: discard
 
 proc loadScriptWithState*(
   intr: var Option[Interpreter],
   script: NimScriptFile or NimScriptPath,
-  userProcs: openArray[VmProcSignature],
-  additions = "",
+  addins: VMAddins = VMaddins(),
   modules: varargs[string],
   stdPath = findNimStdlibCompileTime()) =
   ## Same as loadScript, but saves state, then loads the intepreter into `intr`.
@@ -100,15 +97,14 @@ proc loadScriptWithState*(
       intr.get.saveState()
     else:
       @[]
-  intr = loadScript(script, userProcs, additions, modules, stdPath)
+  intr = loadScript(script, addins, modules, stdPath)
   if intr.isSome:
     intr.get.loadState(state)
 
 proc safeloadScriptWithState*(
   intr: var Option[Interpreter],
   script: NimScriptFile or NimScriptPath,
-  userProcs: openArray[VmProcSignature],
-  additions = "",
+  addins: VMAddins = VMaddins(),
   modules: varargs[string],
   stdPath = findNimStdlibCompileTime()) =
   ## Same as loadScriptWithState but saves state then loads the intepreter into `intr` if there were no script errors.
@@ -118,7 +114,7 @@ proc safeloadScriptWithState*(
       intr.get.saveState()
     else:
       @[]
-  let tempIntr = loadScript(script, additions, modules, stdPath)
+  let tempIntr = loadScript(script, addins, modules, stdPath)
   if tempIntr.isSome:
     intr = tempIntr
     intr.loadState(state)
@@ -133,8 +129,6 @@ proc getGlobalVariable*[T](intr: Option[Interpreter] or Interpreter, name: strin
     fromVm(T, intr.getGlobalValue(sym))
   else:
     raise newException(VmSymNotFound, name & " is not a global symbol in the script.")
-
-
 
 macro invoke*(intr: Interpreter, pName: untyped, args: varargs[typed],
   returnType: typedesc = void): untyped =
