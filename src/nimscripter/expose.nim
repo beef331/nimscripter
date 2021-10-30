@@ -168,7 +168,7 @@ macro exportTo*(moduleName: untyped, procDefs: varargs[untyped]): untyped =
   for pDef in procDefs:
     result.add newCall("addToCache", pdef, newLit(modulename))
 
-macro addCallable*(moduleName: untyped, body: typed{nkProcDef}) =
+macro addCallable*(moduleName: untyped, body: typed) =
   block searchAdd:
     for k, v in checksCache:
       if k.eqIdent(moduleName):
@@ -308,12 +308,11 @@ proc getProcChecks(moduleName: NimNode): string =
         p[0] = newEmptyNode()
         let
           strName = $name
-          procStrType = p.repr
           declaredCheck = quote do:
             when not declared(`name`):
               {.error: `strName` & " is not declared, but is required for this nimscript program".}
-            elif `name` isnot `p`:
-              {.error: `strName` & " should be of type `" & `procStrType` & "`.".}
+            elif `name` isnot `p`{.nimcall.}: # Always want nimcalls for this interop
+              {.error: `strName` & " should be of type " & $typeof(`p`) & " but is " & $typeof(`name`) & "." .}
         result.add "\n"
         result.add declaredCheck.repr
         result.add "\n"
@@ -324,15 +323,21 @@ macro implNimscriptModule*(moduleName: untyped): untyped =
   ## This emits a `VMAddins`, which can be used to pass to the `loadScript` proc.
   moduleName.expectKind(nnkIdent)
   result = nnkBracket.newNimNode()
-  for p in procedureCache[$moduleName]:
-    let impl = generateModuleImpl(p)
-    if impl.kind == nnkStmtList:
-      for child in impl:
-        if child.kind != nnkNilLit:
-          result.add child
-    else:
-      if impl.kind != nnkNilLit:
-        result.add impl
+  let str = $moduleName
+  block search:
+    for key, val in procedureCache.pairs:
+      if key == str:
+        for p in val:
+          let impl = generateModuleImpl(p)
+          if impl.kind == nnkStmtList:
+            for child in impl:
+              if child.kind != nnkNilLit:
+                result.add child
+          else:
+            if impl.kind != nnkNilLit:
+              result.add impl
+        break search
+    result = nnkBracket.newTree()
   var addons = ""
   for (key, val) in addonsCache.pairs:
     if modulename.eqIdent(key):
