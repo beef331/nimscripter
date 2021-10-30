@@ -172,9 +172,17 @@ macro addCallable*(moduleName: untyped, body: typed) =
   block searchAdd:
     for k, v in checksCache:
       if k.eqIdent(moduleName):
-        v.add body
+        v.add:
+          if body.kind == nnkProcDef:
+            body
+          else:
+            body[0]
         break searchAdd
-    checksCache[$moduleName] =  newStmtList(moduleName, body)
+    checksCache[$moduleName] =  newStmtList(moduleName):
+      if body.kind == nnkProcDef:
+          body
+      else:
+          body[0]
 
 iterator generateParamHeaders(paramList: NimNode, types: seq[(int, NimNode)], indicies: var seq[int]): NimNode =
   ## Generates permutations of all proc headers with the given types
