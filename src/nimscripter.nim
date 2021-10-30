@@ -117,7 +117,7 @@ proc safeloadScriptWithState*(
   let tempIntr = loadScript(script, addins, modules, stdPath)
   if tempIntr.isSome:
     intr = tempIntr
-    intr.loadState(state)
+    intr.get.loadState(state)
 
 proc getGlobalVariable*[T](intr: Option[Interpreter] or Interpreter, name: string): T =
   ## Easy access of a global nimscript variable
