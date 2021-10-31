@@ -324,7 +324,6 @@ proc getProcChecks(moduleName: NimNode): string =
         result.add "\n"
         result.add declaredCheck.repr
         result.add "\n"
-        echo result
 
 
 
