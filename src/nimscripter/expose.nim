@@ -319,11 +319,12 @@ proc getProcChecks(moduleName: NimNode): string =
           declaredCheck = quote do:
             when not declared(`name`):
               {.error: `strName` & " is not declared, but is required for this nimscript program".}
-            elif `name` isnot `p`{.nimcall.}: # Always want nimcalls for this interop
-              {.error: `strName` & " should be of type " & $typeof(`p`) & " but is " & $typeof(`name`) & "." .}
+            else:
+              assert (`p`)(`name`) != nil # Ensures the desired overload exists
         result.add "\n"
         result.add declaredCheck.repr
         result.add "\n"
+        echo result
 
 
 
