@@ -7,7 +7,6 @@ Install Nimscripter(`nimble install nimscripter`) with Nimble then create a .nim
 ```nim
 import nimscripter
 proc doThing(): int = 42
-proc doThing(): int = 42
 exportTo(myImpl, doThing) # The name of our "nimscript module" is `myImpl`
 const 
   scriptProcs = implNimScriptModule(myImpl) # This emits our exported code
