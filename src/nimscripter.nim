@@ -1,4 +1,5 @@
 import compiler / [nimeval, renderer, ast, llstream, lineinfos, idents, types]
+import compiler / options as copts
 import std/[os, json, options, strutils, macros]
 import nimscripter/[expose, vmaddins, vmconversion]
 from compiler/vmdef import TSandboxFlag
@@ -7,6 +8,8 @@ export options, Interpreter, ast, lineinfos, idents, nimEval, expose, VMParseErr
 type
   VMQuit* = object of CatchableError
     info*: TLineInfo
+  VMErrorHook* = proc (config: ConfigRef; info: TLineInfo; msg: string;
+                              severity: Severity) {.gcsafe.}
   VmProcNotFound* = object of CatchableError
   VmSymNotFound* = object of CatchableError
   NimScriptFile* = distinct string ## Distinct to load from string
@@ -22,7 +25,7 @@ proc getSearchPath(path: string): seq[string] =
   for dir in walkDirRec(path, {pcDir}):
     result.add dir
 
-proc errorHook(config, info, msg, severity: auto) {.gcsafe.} =
+proc errorHook(config: ConfigRef; info: TLineInfo; msg: string; severity: Severity) {.gcsafe.} =
   if severity == Error and config.error_counter >= config.error_max:
     echo "Script Error: ", info, " ", msg
     raise (ref VMQuit)(info: info, msg: msg)
@@ -47,6 +50,7 @@ proc loadScript*(
   script: NimScriptFile or NimScriptPath,
   addins: VMAddins = VMaddins(),
   modules: varargs[string],
+  vmErrorHook = errorHook,
   stdPath = findNimStdlibCompileTime()): Option[Interpreter] =
   ## Loads an interpreter from a file or from string, with given addtions and userprocs.
   ## To load from the filesystem use `NimScriptPath(yourPath)`.
@@ -54,6 +58,7 @@ proc loadScript*(
   ## `addins` is the overrided procs/addons from `impleNimScriptModule
   ## `modules` implict imports to add to the module.
   ## `stdPath` to use shipped path instead of finding it at compile time.
+  ## `vmErrorHook` a callback which should raise `VmQuit`, refer to `errorHook` for reference.
   const isFile = script is NimScriptPath
   if not isFile or fileExists(script.string):
     var additions = addins.additions
@@ -89,6 +94,7 @@ proc loadScriptWithState*(
   script: NimScriptFile or NimScriptPath,
   addins: VMAddins = VMaddins(),
   modules: varargs[string],
+  vmErrorHook = errorHook,
   stdPath = findNimStdlibCompileTime()) =
   ## Same as loadScript, but saves state, then loads the intepreter into `intr`.
   ## This does not keep a working intepreter if there is a script error.
@@ -97,7 +103,7 @@ proc loadScriptWithState*(
       intr.get.saveState()
     else:
       @[]
-  intr = loadScript(script, addins, modules, stdPath)
+  intr = loadScript(script, addins, modules, vmErrorHook, stdPath)
   if intr.isSome:
     intr.get.loadState(state)
 
@@ -106,6 +112,7 @@ proc safeloadScriptWithState*(
   script: NimScriptFile or NimScriptPath,
   addins: VMAddins = VMaddins(),
   modules: varargs[string],
+  vmErrorHook = errorHook,
   stdPath = findNimStdlibCompileTime()) =
   ## Same as loadScriptWithState but saves state then loads the intepreter into `intr` if there were no script errors.
   ## Tries to keep the interpreter running.
@@ -114,7 +121,7 @@ proc safeloadScriptWithState*(
       intr.get.saveState()
     else:
       @[]
-  let tempIntr = loadScript(script, addins, modules, stdPath)
+  let tempIntr = loadScript(script, addins, modules, vmErrorHook, stdPath)
   if tempIntr.isSome:
     intr = tempIntr
     intr.get.loadState(state)
