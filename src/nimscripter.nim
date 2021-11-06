@@ -81,7 +81,7 @@ proc loadScript*(
     for uProc in addins.procs:
       intr.implementRoutine("*", scriptName, uProc.name, uProc.vmProc)
 
-    intr.registerErrorHook(errorHook)
+    intr.registerErrorHook(vmErrorHook)
     try:
       additions.add script
       additions.add addins.postCodeAdditions
