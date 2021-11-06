@@ -2,11 +2,10 @@
 Nimscripter is enables easy interop between Nim and Nimscript for realtime scriptable applications.
 
 ## How to use
-Install Nimscripter(`nimble install nimscripter`) with Nimble then create a .nim file and .nims file.
+Install Nimscripter(`nimble install nimscripter`) with Nimble then create a .nim file with the following.
 
 ```nim
 import nimscripter
-proc doThing(): int = 42
 proc doThing(): int = 42
 exportTo(myImpl, doThing) # The name of our "nimscript module" is `myImpl`
 const 
