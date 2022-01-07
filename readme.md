@@ -14,6 +14,7 @@ const
 let intr = loadScript(ourScript, scriptProcs) # Load our script with our code and using our system `stdlib`(not portable)
 ```
 
+You also may need to create a `config.nims` with `--path:"$nim"` for the compiler api to work.
 
 ### Calling code from Nim
 Any exported non overloaded and non generic procedures can be called from Nim
