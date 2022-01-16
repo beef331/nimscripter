@@ -39,6 +39,13 @@ suite("General A(fromFile)"):
     check intr.invoke(getbool, true, returnType = bool) == true
     check intr.invoke(getSomeEnum, a, returnType = SomeEnum) == a
 
+    var myRefSeq = new seq[int]
+    myRefSeq[] = @[10, 20, 30]
+
+    check intr.invoke(getRefSeq, myRefSeq, returnType = typeof(myRefSeq))[] == myRefSeq[]
+    myRefSeq = nil
+    check intr.invoke(getRefSeq, myRefSeq, returnType = typeof(myRefSeq)).isNil
+
   test("parseErrors"):
     expect(VMParseError):
       intr.invoke(getfloat, 3.14, returnType = SomeEnum)

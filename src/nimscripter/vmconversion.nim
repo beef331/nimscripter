@@ -23,6 +23,7 @@ proc toVm*[T: uint](a: T): Pnode = newIntNode(nkuIntLit, a.BiggestInt)
 proc toVm*[T: float32](a: T): Pnode = newFloatNode(nkFloat32Lit, BiggestFloat(a))
 proc toVm*[T: float64](a: T): Pnode = newFloatNode(nkFloat64Lit, BiggestFloat(a))
 proc toVm*[T: string](a: T): PNode = newStrNode(nkStrLit, a)
+proc toVm*[T: proc](a: T): PNode = newNode(nkEmpty)
 
 proc toVm*[T](s: set[T]): PNode =
   result = newNode(nkCurly)
@@ -35,7 +36,9 @@ proc toVm*[T](s: set[T]): PNode =
 proc toVm*[T: openArray](obj: T): PNode
 proc toVm*[T: tuple](obj: T): PNode
 proc toVm*[T: object](obj: T): PNode
-proc toVm*[T: ref object](obj: T): PNode
+proc toVm*[T: ref](obj: T): PNode
+proc toVm*[T: distinct](a: T): PNode = toVm(distinctBase(T, true)(a))
+
 
 template raiseParseError(t: typedesc): untyped =
   raise newException(VMParseError, "Cannot convert to: " & $t)
@@ -76,9 +79,14 @@ proc fromVm*[T](t: typedesc[set[T]], node: Pnode): t =
   else:
     raiseParseError(set[T])
 
+proc fromVm*(t: typedesc[proc]): typeof(t) = nil
+
 proc fromVm*[T: object](obj: typedesc[T], vmNode: PNode): T
 proc fromVm*[T: tuple](obj: typedesc[T], vmNode: Pnode): T
 proc fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): T
+proc fromVm*[T: ref(not object)](obj: typedesc[T], vmNode: PNode): T
+
+proc fromVm*[T: distinct](obj: typedesc[T], vmNode: PNode): T = T(fromVm(distinctBase(T, true)))
 
 proc fromVm*[T](obj: typedesc[seq[T]], vmNode: Pnode): seq[T] =
   if vmNode.kind in {nkBracket, nkBracketExpr}:
@@ -275,6 +283,11 @@ proc fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): T =
   else:
     raiseParseError(T)
 
+proc fromVm*[T: ref(not object)](obj: typedesc[T], vmNode: PNode): T =
+  if vmNode.kind != nkNilLit:
+    new result
+    result[] = fromVm(typeof(result[]), vmNode)
+
 proc toVm*[T: openArray](obj: T): PNode =
   result = newNode(nkBracketExpr)
   for x in obj:
@@ -298,7 +311,7 @@ proc toVm*[T: object](obj: T): PNode =
       result[i].add toVm(it)
     inc i
 
-proc toVm*[T: ref object](obj: T): PNode =
+proc toVm*[T: ref](obj: T): PNode =
   if obj.isNil:
     newNode(nkNilLit)
   else:

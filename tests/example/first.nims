@@ -44,6 +44,9 @@ proc getArray*(a: array[5, int]): array[5, int] = a
 proc getSeq*(a: seq[int]): seq[int] = a
 proc getString*(s: string): string = s
 
+proc getRefSeq*(a: ref seq[int]): ref seq[int] = a
+
+
 
 template makeNumTest(T: typedesc[SomeOrdinal or char or SomeFloat]) = 
   proc `get T`*(a: T): T = a
