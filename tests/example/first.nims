@@ -46,7 +46,7 @@ proc getString*(s: string): string = s
 
 proc getRefSeq*(a: ref seq[int]): ref seq[int] = a
 
-
+proc getProc*(a: proc(){.nimcall.}): proc(){.nimcall.} = a
 
 template makeNumTest(T: typedesc[SomeOrdinal or char or SomeFloat]) = 
   proc `get T`*(a: T): T = a

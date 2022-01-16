@@ -45,6 +45,7 @@ suite("General A(fromFile)"):
     check intr.invoke(getRefSeq, myRefSeq, returnType = typeof(myRefSeq))[] == myRefSeq[]
     myRefSeq = nil
     check intr.invoke(getRefSeq, myRefSeq, returnType = typeof(myRefSeq)).isNil
+    check intr.invoke(getProc, proc(){.nimcall.} = discard, returnType = proc(){.nimcall.}).isNil
 
   test("parseErrors"):
     expect(VMParseError):
