@@ -47,6 +47,14 @@ suite("General A(fromFile)"):
     check intr.invoke(getRefSeq, myRefSeq, returnType = typeof(myRefSeq)).isNil
     check intr.invoke(getProc, proc(){.nimcall.} = discard, returnType = proc(){.nimcall.}).isNil
 
+    type AnObject = object
+      a, b: int
+      when false:
+        a, b: int
+
+    check fromVm(AnObject, AnObject(a: 100, b: 20).toVm) == AnObject(a: 100, b: 20)
+
+
   test("parseErrors"):
     expect(VMParseError):
       intr.invoke(getfloat, 3.14, returnType = SomeEnum)

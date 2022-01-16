@@ -203,7 +203,10 @@ proc parseObject(body, vmNode, baseType: NimNode, offset: var int, fields: var s
     result = newStmtList()
     addConstr(result)
   of nnkRecWhen:
-    error("Nimscripter cannot support objects that use when statments. A proc that uses this object is the issue.", body)
+    if body[0][0].kind == nnkIdent and body[0][0].eqIdent"false":
+      result = newEmptyNode()
+    else:
+      error("Nimscripter cannot support objects that use when statments. A proc that uses this object is the issue.", body)
   else: discard
 
 proc parseObject(body, vmNode, baseType: NimNode, offset: var int): NimNode =
