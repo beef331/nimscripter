@@ -23,7 +23,7 @@ proc toVm*[T: uint](a: T): Pnode = newIntNode(nkuIntLit, a.BiggestInt)
 proc toVm*[T: float32](a: T): Pnode = newFloatNode(nkFloat32Lit, BiggestFloat(a))
 proc toVm*[T: float64](a: T): Pnode = newFloatNode(nkFloat64Lit, BiggestFloat(a))
 proc toVm*[T: string](a: T): PNode = newStrNode(nkStrLit, a)
-proc toVm*[T: proc](a: T): PNode = newNode(nkEmpty)
+proc toVm*[T: proc](a: T): PNode = newNode(nkNilLit)
 
 proc toVm*[T](s: set[T]): PNode =
   result = newNode(nkCurly)
@@ -85,6 +85,8 @@ proc fromVm*[T: object](obj: typedesc[T], vmNode: PNode): T
 proc fromVm*[T: tuple](obj: typedesc[T], vmNode: Pnode): T
 proc fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): T
 proc fromVm*[T: ref(not object)](obj: typedesc[T], vmNode: PNode): T
+
+proc fromVm*[T: proc](obj: typedesc[T], vmNode: PNode): T = nil
 
 proc fromVm*[T: distinct](obj: typedesc[T], vmNode: PNode): T = T(fromVm(distinctBase(T, true)))
 
