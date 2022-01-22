@@ -116,3 +116,8 @@ suite("General B(fromstring)"):
     check intr.getGlobalVariable[: int]("someVal") == 32
     intr.loadScriptWithState(NimScriptFile(file))
     check intr.getGlobalVariable[: int]("someVal") == 32
+
+  test("Dynamic invoke"):
+    const script = NimScriptFile"proc fancyStuff*(a: int) = assert a in [10, 300]"
+    let intr = loadScript(script)
+    intr.get.invokeDynamic("fancyStuff", 10)
