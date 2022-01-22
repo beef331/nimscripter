@@ -1,6 +1,5 @@
 import nimscripter
-import nimscripter/vmconversion
-import nimscripter/variables
+import nimscripter/[vmconversion, variables]
 import example/objects
 import std/[json, unittest]
 suite("General A(fromFile)"):
@@ -124,7 +123,7 @@ suite("General B(fromstring)"):
     intr.get.invokeDynamic("fancyStuff", 10)
 
   test("Get global variables macro"):
-    let script = NimScriptFile: """
+    let script = NimScriptFile"""
 let required* = "main"
 let defaultValueExists* = "foo"
 """

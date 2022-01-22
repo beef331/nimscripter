@@ -28,12 +28,24 @@ macro getWithDefault(intr; name: untyped; defaultValue: typed) =
 
 macro getGlobalNimsVars*(intr; varDefs: untyped) =
   ## Allows you to define variables that should be populated from a nimscript
-  ## Usage:
-  ##  getGlobalNimsVars(intr):
-  ##    varName: string # required variable
-  ##    varNameOpt: Option[string] # optional variable
-  ##    varNameDef = "default" # optional variable with default value
-  # echo varDefs.treeRepr
+  runnableExamples:
+    let script = NimScriptFile"""
+let required* = "main"
+let defaultValueExists* = "foo"
+"""
+    let intr = loadScript script
+
+    getGlobalNimsVars intr:
+      required: string # required variable
+      optional: Option[string] # optional variable
+      defaultValue: int = 1 # optional variable with default value
+      defaultValueExists = "bar"
+
+    check required == "main"
+    check optional.isNone
+    check defaultValue == 1
+    check defaultValueExists == "foo"
+
   vardefs.expectKind nnkStmtList
   result = newStmtList()
   for def in varDefs:
