@@ -244,6 +244,9 @@ macro fromVmImpl[T: object](obj: typedesc[T], vmNode: PNode): untyped =
   var offset = 1
   result = newStmtList(newCall(bindSym"privateAccess", typ)):
     parseObject(recList, vmNode, typ, offset)
+  if result[^1].kind == nnkNilLit:
+    result = quote do:
+      default(`obj`)
 
 proc getRefRecList(n: NimNode): NimNode =
   if n.len > 0:
@@ -270,11 +273,19 @@ macro fromVmImpl[T: ref object](obj: typedesc[T], vmNode: PNode): untyped =
   var offset = 1
   result = newStmtList(newCall(bindSym"privateAccess", typConv)):
     parseObject(recList, vmNode, typ, offset)
-  result = quote do:
-    if `vmNode`.kind == nkNilLit:
-      default(`typConv`)
-    else:
-      `result`
+  if result[^1].kind != nnkNilLit:
+    # In the case we dont have fields we dont want the `parseObject` logic
+    result = quote do:
+      if `vmNode`.kind == nkNilLit:
+        typeof(`obj`)(nil)
+      else:
+        `result`
+  else:
+    result = quote do:
+      if `vmNode`.kind == nkNilLit:
+        typeof(`obj`)(nil)
+      else:
+        `obj`()
 
 proc fromVm*[T: object](obj: typedesc[T], vmNode: PNode): T =
   if vmNode.kind == nkObjConstr:
