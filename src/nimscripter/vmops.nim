@@ -1,10 +1,13 @@
 ## This module contains the a template to implement procedures similar to those that are normally in the `nimscript` module
-import std/os
+import std/[os, osproc]
 import nimscripter/expose
 
 proc exec(s: string) =
   if execShellCmd(s) != 0:
     raise newException(OSError, s)
+
+proc gorgeEx(cmd: string): tuple[output: string, exitCode: int] =
+  execCmdEx(cmd)
 
 proc listFiles(dir: string): seq[string] =
   for kind, path in walkDir(dir):
@@ -38,5 +41,6 @@ template addVmops*(module: untyped) =
     listFiles,
     listDirs,
     vmops.removeDir,
-    vmops.removeFile
+    vmops.removeFile,
+    vmops.gorgeEx
   )
