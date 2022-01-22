@@ -3,9 +3,8 @@ import std/os
 import nimscripter/expose
 
 proc exec(s: string) =
-  try:
-    discard execShellCmd(s)
-  except: discard
+  if execShellCmd(s) != 0:
+    raise newException(OSError, s)
 
 proc listFiles(dir: string): seq[string] =
   for kind, path in walkDir(dir):
