@@ -137,13 +137,12 @@ proc getGlobalVariable*[T](intr: Option[Interpreter] or Interpreter, name: strin
   else:
     raise newException(VmSymNotFound, name & " is not a global symbol in the script.")
 
-macro invoke*(intr: Interpreter, pName: untyped, args: varargs[typed],
+macro invokeDynamic*(intr: Interpreter, pName: string, args: varargs[typed],
   returnType: typedesc = void): untyped =
   ## Calls a nimscript function named `pName`, passing the `args`
   ## Converts the returned value to `returnType`
   let
     convs = newStmtList()
-    procName = newLit($pname)
     argSym = genSym(nskVar, "args")
     retName = genSym(nskLet, "ret")
     retNode = newStmtList()
@@ -173,7 +172,7 @@ macro invoke*(intr: Interpreter, pName: untyped, args: varargs[typed],
     block:
       when `returnType` isnot void:
         var `resultIdnt`: `returnType`
-      let `nsProc` = `intr`.selectRoutine(`procName`)
+      let `nsProc` = `intr`.selectRoutine(`pName`)
       if `nsProc` != nil:
         `convs`
         when `returnType` isnot void:
@@ -182,15 +181,22 @@ macro invoke*(intr: Interpreter, pName: untyped, args: varargs[typed],
         else:
           `nsCall`
       else:
-        raise newException(VmProcNotFound, "'$#' was not found in the script." % `procName`)
+        raise newException(VmProcNotFound, "'$#' was not found in the script." % `pName`)
 
-macro invoke*(intr: Option[Interpreter], pName: untyped, args: varargs[typed],
-    returnType: typedesc = void): untyped =
+macro invoke*(intr: Option[Interpreter], pName: untyped, 
+    args: varargs[typed], returnType: typedesc = void): untyped =
   ## Invoke but takes an option and unpacks it, if `intr.`isNone, assertion is raised
-  result = newCall("invoke", newCall("get", intr), pname)
+  result = newCall("invokeDynamic", newCall("get", intr), pName.toStrLit)
   for x in args:
     result.add x
-  result.add nnkExprEqExpr.newTree(ident"returnType",  returnType)
+  result.add nnkExprEqExpr.newTree(ident"returnType", returnType)
   result = quote do:
     assert `intr`.isSome
     `result`
+
+macro invoke*(intr: Interpreter, pName: untyped, 
+    args: varargs[typed], returnType: typedesc = void): untyped =
+  result = newCall("invokeDynamic", intr, pName.toStrLit)
+  for x in args:
+    result.add x
+  result.add nnkExprEqExpr.newTree(ident"returnType", returnType)

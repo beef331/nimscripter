@@ -1,11 +1,13 @@
 ## This module contains the a template to implement procedures similar to those that are normally in the `nimscript` module
-import std/os
+import std/[os, osproc]
 import nimscripter/expose
 
 proc exec(s: string) =
-  try:
-    discard execShellCmd(s)
-  except: discard
+  if execShellCmd(s) != 0:
+    raise newException(OSError, s)
+
+proc gorgeEx(cmd: string): tuple[output: string, exitCode: int] =
+  execCmdEx(cmd)
 
 proc listFiles(dir: string): seq[string] =
   for kind, path in walkDir(dir):
@@ -17,12 +19,12 @@ proc listDirs(dir: string): seq[string] =
     if kind == pcDir:
       result.add path
 
-proc removeDir(dir: string) = os.removeDir(dir, true)
-proc removeFile(dir: string) =
-  try:
-    os.removeFile(dir)
-  except:
-    discard
+proc rmDir(dir: string, checkDir = false) = removeDir(dir, checkDir)
+proc rmFile(dir: string) = removeFile(dir)
+proc mvDir(`from`, to: string, checkDir = false) = moveDir(`from`, to)
+proc mvFile(`from`, to: string) = moveFile(`from`, to)
+proc cd(dir: string) = setCurrentDir(dir)
+
 
 template addVmops*(module: untyped) =
   ## Adds the ops to the provided `module`
@@ -30,14 +32,16 @@ template addVmops*(module: untyped) =
   exportTo(module,
     getCurrentDir,
     setCurrentDir,
-    moveFile,
-    moveDir,
+    cd,
+    mvDir,
+    mvFile,
     execShellCmd,
     exec,
     existsOrCreateDir,
     tryRemoveFile,
     listFiles,
     listDirs,
-    vmops.removeDir,
-    vmops.removeFile
+    rmDir,
+    rmFile,
+    vmops.gorgeEx
   )

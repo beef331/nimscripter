@@ -1,5 +1,5 @@
 import nimscripter
-import nimscripter/vmconversion
+import nimscripter/[vmconversion, variables]
 import example/objects
 import std/[json, unittest]
 suite("General A(fromFile)"):
@@ -116,3 +116,27 @@ suite("General B(fromstring)"):
     check intr.getGlobalVariable[: int]("someVal") == 32
     intr.loadScriptWithState(NimScriptFile(file))
     check intr.getGlobalVariable[: int]("someVal") == 32
+
+  test("Dynamic invoke"):
+    const script = NimScriptFile"proc fancyStuff*(a: int) = assert a in [10, 300]"
+    let intr = loadScript(script)
+    intr.get.invokeDynamic("fancyStuff", 10)
+
+  test("Get global variables macro"):
+    let script = NimScriptFile"""
+let required* = "main"
+let defaultValueExists* = "foo"
+"""
+
+    let intr = loadScript script
+
+    getGlobalNimsVars intr:
+      required: string
+      optional: Option[string]
+      defaultValue: int = 1
+      defaultValueExists = "bar"
+
+    check required == "main"
+    check optional.isNone
+    check defaultValue == 1
+    check defaultValueExists == "foo"
