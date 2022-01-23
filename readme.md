@@ -37,6 +37,33 @@ intr.invoke(fancyStuff, 10) # Calls `fancyStuff(10)` in vm
 intr.invoke(fancyStuff, 300) # Calls `fancyStuff(300)` in vm
 ```
 
+### Getting global variables from nimscript
+
+You may extract global variables from a nimscript file using a convenience macro.
+
+```nim
+import nimscripter, nimscripter/variables
+
+let script = NimScriptFile"""
+let required* = "main"
+let defaultValueExists* = "foo"
+"""
+let intr = loadScript script
+
+getGlobalNimsVars intr:
+  required: string # required variable
+  optional: Option[string] # optional variable
+  defaultValue: int = 1 # optional variable with default value
+  defaultValueExists = "bar" # You may omit the type if there is a default value
+
+check required == "main"
+check optional.isNone
+check defaultValue == 1
+check defaultValueExists == "foo"
+
+```
+Basic types are supported, such as string, int, bool, etc..
+
 ### Using a custom/shipped stdlib
 
 Make a folder entitled `stdlib` and copy all Nim files you wish to ship as a stdlib from Nim's stdlib and any of your own files.
