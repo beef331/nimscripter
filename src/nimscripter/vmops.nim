@@ -20,9 +20,9 @@ proc listDirs(dir: string): seq[string] =
       result.add path
 
 proc rmDir(dir: string, checkDir = false) = removeDir(dir, checkDir)
-proc rmFile(dir: string) = removeFile(dir)
-proc mvDir(`from`, to: string, checkDir = false) = moveDir(`from`, to)
-proc mvFile(`from`, to: string) = moveFile(`from`, to)
+proc rmFile(file: string) = removeFile(file)
+proc mvDir(source, dest: string, checkDir = false) = moveDir(source, dest)
+proc mvFile(source, dest: string) = moveFile(source, dest)
 proc cd(dir: string) = setCurrentDir(dir)
 
 
