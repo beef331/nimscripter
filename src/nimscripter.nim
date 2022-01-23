@@ -40,18 +40,19 @@ when declared(nimeval.setGlobalValue):
           name = x.name.s
         result.add SavedVar(name: name, typ: typ, val: val)
 
-  proc loadState*(intr: Interpreter, state: SaveState) = 
+  proc loadState*(intr: Interpreter; state: SaveState) =
     for x in state:
       let sym = intr.selectUniqueSymbol(x.name, {skLet, skVar})
       if sym != nil and sameType(sym.typ, x.typ):
         intr.setGlobalValue(sym, x.val)
 
 proc loadScript*(
-  script: NimScriptFile or NimScriptPath,
-  addins: VMAddins = VMaddins(),
-  modules: varargs[string],
-  vmErrorHook = errorHook,
-  stdPath = findNimStdlibCompileTime()): Option[Interpreter] =
+  script: NimScriptFile or NimScriptPath;
+  addins: VMAddins = VMaddins();
+  modules: varargs[string];
+  vmErrorHook = errorHook;
+  stdPath = findNimStdlibCompileTime();
+  searchPaths: sink seq[string] = @[]): Option[Interpreter] =
   ## Loads an interpreter from a file or from string, with given addtions and userprocs.
   ## To load from the filesystem use `NimScriptPath(yourPath)`.
   ## To load from a string use `NimScriptFile(yourFile)`.
@@ -59,6 +60,7 @@ proc loadScript*(
   ## `modules` implict imports to add to the module.
   ## `stdPath` to use shipped path instead of finding it at compile time.
   ## `vmErrorHook` a callback which should raise `VmQuit`, refer to `errorHook` for reference.
+  ## `searchPaths` optional paths one can use to supply libraries or packages for the
   const isFile = script is NimScriptPath
   if not isFile or fileExists(script.string):
     var additions = addins.additions
@@ -68,7 +70,8 @@ proc loadScript*(
     for uProc in addins.procs:
       additions.add uProc.vmRunImpl
 
-    var searchPaths = getSearchPath(stdPath)
+    var searchPaths = searchPaths
+    searchPaths.add getSearchPath(stdPath)
     let scriptName = when isFile: script.string.splitFile.name else: "script"
 
     when isFile: # If is file we want to enable relative imports
@@ -90,43 +93,45 @@ proc loadScript*(
     except VMQuit: discard
 
 proc loadScriptWithState*(
-  intr: var Option[Interpreter],
-  script: NimScriptFile or NimScriptPath,
-  addins: VMAddins = VMaddins(),
-  modules: varargs[string],
-  vmErrorHook = errorHook,
-  stdPath = findNimStdlibCompileTime()) =
+  intr: var Option[Interpreter];
+  script: NimScriptFile or NimScriptPath;
+  addins: VMAddins = VMaddins();
+  modules: varargs[string];
+  vmErrorHook = errorHook;
+  stdPath = findNimStdlibCompileTime();
+  searchPaths: sink seq[string] = @[]) =
   ## Same as loadScript, but saves state, then loads the intepreter into `intr`.
   ## This does not keep a working intepreter if there is a script error.
-  let state = 
+  let state =
     if intr.isSome:
       intr.get.saveState()
     else:
       @[]
-  intr = loadScript(script, addins, modules, vmErrorHook, stdPath)
+  intr = loadScript(script, addins, modules, vmErrorHook, stdPath, searchPaths)
   if intr.isSome:
     intr.get.loadState(state)
 
 proc safeloadScriptWithState*(
-  intr: var Option[Interpreter],
-  script: NimScriptFile or NimScriptPath,
-  addins: VMAddins = VMaddins(),
-  modules: varargs[string],
-  vmErrorHook = errorHook,
-  stdPath = findNimStdlibCompileTime()) =
+  intr: var Option[Interpreter];
+  script: NimScriptFile or NimScriptPath;
+  addins: VMAddins = VMaddins();
+  modules: varargs[string];
+  vmErrorHook = errorHook;
+  stdPath = findNimStdlibCompileTime();
+  searchPaths: sink seq[string] = @[]) =
   ## Same as loadScriptWithState but saves state then loads the intepreter into `intr` if there were no script errors.
   ## Tries to keep the interpreter running.
-  let state = 
+  let state =
     if intr.isSome:
       intr.get.saveState()
     else:
       @[]
-  let tempIntr = loadScript(script, addins, modules, vmErrorHook, stdPath)
+  let tempIntr = loadScript(script, addins, modules, vmErrorHook, stdPath, searchPaths)
   if tempIntr.isSome:
     intr = tempIntr
     intr.get.loadState(state)
 
-proc getGlobalVariable*[T](intr: Option[Interpreter] or Interpreter, name: string): T =
+proc getGlobalVariable*[T](intr: Option[Interpreter] or Interpreter; name: string): T =
   ## Easy access of a global nimscript variable
   when intr is Option[Interpreter]:
     assert intr.isSome
@@ -137,7 +142,7 @@ proc getGlobalVariable*[T](intr: Option[Interpreter] or Interpreter, name: strin
   else:
     raise newException(VmSymNotFound, name & " is not a global symbol in the script.")
 
-macro invokeDynamic*(intr: Interpreter, pName: string, args: varargs[typed],
+macro invokeDynamic*(intr: Interpreter; pName: string; args: varargs[typed];
   returnType: typedesc = void): untyped =
   ## Calls a nimscript function named `pName`, passing the `args`
   ## Converts the returned value to `returnType`
@@ -183,8 +188,8 @@ macro invokeDynamic*(intr: Interpreter, pName: string, args: varargs[typed],
       else:
         raise newException(VmProcNotFound, "'$#' was not found in the script." % `pName`)
 
-macro invoke*(intr: Option[Interpreter], pName: untyped, 
-    args: varargs[typed], returnType: typedesc = void): untyped =
+macro invoke*(intr: Option[Interpreter]; pName: untyped;
+    args: varargs[typed]; returnType: typedesc = void): untyped =
   ## Invoke but takes an option and unpacks it, if `intr.`isNone, assertion is raised
   result = newCall("invokeDynamic", newCall("get", intr), pName.toStrLit)
   for x in args:
@@ -194,8 +199,8 @@ macro invoke*(intr: Option[Interpreter], pName: untyped,
     assert `intr`.isSome
     `result`
 
-macro invoke*(intr: Interpreter, pName: untyped, 
-    args: varargs[typed], returnType: typedesc = void): untyped =
+macro invoke*(intr: Interpreter; pName: untyped;
+    args: varargs[typed]; returnType: typedesc = void): untyped =
   result = newCall("invokeDynamic", intr, pName.toStrLit)
   for x in args:
     result.add x
