@@ -70,8 +70,7 @@ proc loadScript*(
     for uProc in addins.procs:
       additions.add uProc.vmRunImpl
 
-    var searchPaths = searchPaths
-    searchPaths.add getSearchPath(stdPath)
+    var searchPaths = getSearchPath(stdPath) & searchPaths
     let scriptName = when isFile: script.string.splitFile.name else: "script"
 
     when isFile: # If is file we want to enable relative imports

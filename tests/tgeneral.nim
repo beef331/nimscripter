@@ -1,7 +1,8 @@
 import nimscripter
 import nimscripter/[vmconversion, variables]
 import example/objects
-import std/[json, unittest]
+import std/[json, unittest, os]
+
 suite("General A(fromFile)"):
   var compl: ComplexObject
   proc doStuff(a: ComplexObject) = compl = a
@@ -68,7 +69,7 @@ suite("General A(fromFile)"):
       intr.invoke(getChar, 'a', returnType = string)
 
     expect(VMParseError):
-      discard intr.getGlobalVariable[: seq[int]]("a")
+      discard intr.getGlobalVariable[:seq[int]]("a")
 
     expect(VMParseError):
       discard intr.getGlobalVariable[: (int, int)]("a")
@@ -83,7 +84,7 @@ suite("General A(fromFile)"):
     check intr.get.invoke(getByteSet, byteSet, returnType = set[byte]) == byteSet
     check intr.get.invoke(getIntSet, intSet, returnType = set[355..357]) == intSet
     check intr.get.invoke(getEnumSet, enumSet, returnType = set[SomeEnum]) == enumSet
-  
+
   test("colls"):
     const
       arr = [1, 2, 3, 4, 5]
@@ -111,11 +112,11 @@ suite("General B(fromstring)"):
     const file = "var someVal* = 52\nproc setVal* = someVal = 32"
     var intr = loadScript(NimScriptFile(file))
 
-    check intr.getGlobalVariable[: int]("someVal") == 52
+    check intr.getGlobalVariable[:int]("someVal") == 52
     intr.invoke(setVal)
-    check intr.getGlobalVariable[: int]("someVal") == 32
+    check intr.getGlobalVariable[:int]("someVal") == 32
     intr.loadScriptWithState(NimScriptFile(file))
-    check intr.getGlobalVariable[: int]("someVal") == 32
+    check intr.getGlobalVariable[:int]("someVal") == 32
 
   test("Dynamic invoke"):
     const script = NimScriptFile"proc fancyStuff*(a: int) = assert a in [10, 300]"
@@ -140,3 +141,7 @@ let defaultValueExists* = "foo"
     check optional.isNone
     check defaultValue == 1
     check defaultValueExists == "foo"
+
+suite "Use Nimble":
+  let nimblePath = getHomeDir() / ".nimble" / "pkgs"
+  let intr = loadScript(NimscriptFile"", searchPaths = @[nimblePath])
