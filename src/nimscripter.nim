@@ -1,6 +1,6 @@
 import compiler / [nimeval, renderer, ast, llstream, lineinfos, idents, types]
 import compiler / options as copts
-import std/[os, json, options, strutils, macros]
+import std/[os, json, options, strutils, macros, tables]
 import nimscripter/[expose, vmaddins, vmconversion]
 from compiler/vmdef import TSandboxFlag
 export options, Interpreter, ast, lineinfos, idents, nimEval, expose, VMParseError
@@ -27,7 +27,11 @@ proc getSearchPath(path: string): seq[string] =
 
 proc errorHook(config: ConfigRef; info: TLineInfo; msg: string; severity: Severity) {.gcsafe.} =
   if severity == Error and config.error_counter >= config.error_max:
-    echo "Script Error: ", info, " ", msg
+    var fileName: string
+    for k, v in config.m.filenameToIndexTbl.pairs:
+      if v == info.fileIndex:
+        fileName = k
+    echo "Script Error: $1:$2:$3 $4." % [fileName, $info.line, $(info.col + 1), msg]
     raise (ref VMQuit)(info: info, msg: msg)
 
 when declared(nimeval.setGlobalValue):
