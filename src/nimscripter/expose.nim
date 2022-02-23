@@ -144,7 +144,11 @@ proc addToProcCache(n: NimNode, moduleName: string) =
   procedureCache[moduleName] = nnkStmtList.newTree(n)
 
 proc addToAddonCache(n: NimNode, moduleName: string) =
-  var impl = n.getImpl()
+  var impl =
+    if n.kind == nnkSym:
+      n.getImpl()
+    else:
+      n
   if impl.kind == nnktypeDef:
     impl = nnkTypeSection.newTree(impl)
   for name, _ in addonsCache:
@@ -325,6 +329,15 @@ proc getProcChecks(moduleName: NimNode): string =
         result.add declaredCheck.repr
         result.add "\n"
 
+
+macro exportCodeAndKeep*(module: untyped, code: typed): untyped =
+  ## Used for exporting code and keeping it in Nim
+  addToAddonCache(code, $module)
+  result = code
+
+macro exportCode*(module: untyped, code: typed): untyped =
+  ## Used for exporting code to nimscript, not declaring it in Nim
+  addToAddonCache(code, $module)
 
 
 macro implNimscriptModule*(moduleName: untyped): untyped =

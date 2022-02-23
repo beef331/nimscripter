@@ -76,6 +76,7 @@ proc loadScript*(
     when isFile: # If is file we want to enable relative imports
       searchPaths.add script.string.parentDir
 
+
     let
       intr = createInterpreter(scriptName, searchPaths, flags = {allowInfiniteLoops})
       script = when isFile: readFile(script.string) else: script.string
@@ -87,6 +88,8 @@ proc loadScript*(
     try:
       additions.add script
       additions.add addins.postCodeAdditions
+      when defined(debugScript):
+        echo additions
       intr.evalScript(llStreamOpen(additions))
       result = option(intr)
     except VMQuit: discard

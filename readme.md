@@ -64,6 +64,15 @@ check defaultValueExists == "foo"
 ```
 Basic types are supported, such as string, int, bool, etc..
 
+
+### Exporting code verbatim
+`nimscriptr/expose` has `exportCode` and `exportCodeAndKeep` they both work the same, except the latter keeps the code so it can be used inside Nim.
+```nim
+exportCode(nimScripter):
+ proc doThing(a, b: int) = echo a, " ", b # This runs on nimscript if called there
+```
+
+
 ### Using a custom/shipped stdlib
 
 Make a folder entitled `stdlib` and copy all Nim files you wish to ship as a stdlib from Nim's stdlib and any of your own files.
