@@ -160,10 +160,19 @@ proc addToAddonCache(n: NimNode, moduleName: string) =
 macro addToCache*(sym: typed, moduleName: static string) =
   ## Can be used to manually add a symbol to a cache.
   ## Otherwise used internally to add symbols to cache
-  if sym.kind == nnkSym and sym.symKind in {nskType, nskConverter, nskIterator, nskMacro, nskTemplate}:
-    addToAddonCache(sym, moduleName)
-  else:
-    addToProcCache(sym, moduleName)
+  case sym.kind
+  of nnkSym:
+    if sym.symKind in {nskType, nskConverter, nskIterator, nskMacro, nskTemplate}:
+      addToAddonCache(sym, moduleName)
+    else:
+      addToProcCache(sym, moduleName)
+  of nnkClosedSymChoice:
+    for x in sym:
+      if x.symKind in {nskType, nskConverter, nskIterator, nskMacro, nskTemplate}:
+        addToAddonCache(x, moduleName)
+      else:
+        addToProcCache(x, moduleName)
+  else: error("Invalid code passed must be a symbol")
 
 macro exportTo*(moduleName: untyped, procDefs: varargs[untyped]): untyped =
   ## Takes a module name and symbols, adding them to the proper table internally.
