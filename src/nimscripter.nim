@@ -5,6 +5,8 @@ import nimscripter/[expose, vmaddins, vmconversion]
 from compiler/vmdef import TSandboxFlag
 export options, Interpreter, ast, lineinfos, idents, nimEval, expose, VMParseError
 
+const defaultDefines = @{"nimscript": "true", "nimconfig": "true"}
+
 type
   VMQuit* = object of CatchableError
     info*: TLineInfo
@@ -56,7 +58,8 @@ proc loadScript*(
   modules: varargs[string];
   vmErrorHook = errorHook;
   stdPath = findNimStdlibCompileTime();
-  searchPaths: sink seq[string] = @[]): Option[Interpreter] =
+  searchPaths: sink seq[string] = @[];
+  defines = defaultDefines): Option[Interpreter] =
   ## Loads an interpreter from a file or from string, with given addtions and userprocs.
   ## To load from the filesystem use `NimScriptPath(yourPath)`.
   ## To load from a string use `NimScriptFile(yourFile)`.
@@ -82,7 +85,9 @@ proc loadScript*(
 
 
     let
-      intr = createInterpreter(scriptName, searchPaths, flags = {allowInfiniteLoops})
+      intr = createInterpreter(scriptName, searchPaths, flags = {allowInfiniteLoops},
+        defines = defines
+      )
       script = when isFile: readFile(script.string) else: script.string
 
     for uProc in addins.procs:
@@ -105,7 +110,8 @@ proc loadScriptWithState*(
   modules: varargs[string];
   vmErrorHook = errorHook;
   stdPath = findNimStdlibCompileTime();
-  searchPaths: sink seq[string] = @[]) =
+  searchPaths: sink seq[string] = @[];
+  defines = defaultDefines) =
   ## Same as loadScript, but saves state, then loads the intepreter into `intr`.
   ## This does not keep a working intepreter if there is a script error.
   let state =
@@ -113,7 +119,7 @@ proc loadScriptWithState*(
       intr.get.saveState()
     else:
       @[]
-  intr = loadScript(script, addins, modules, vmErrorHook, stdPath, searchPaths)
+  intr = loadScript(script, addins, modules, vmErrorHook, stdPath, searchPaths, defines)
   if intr.isSome:
     intr.get.loadState(state)
 
@@ -124,7 +130,8 @@ proc safeloadScriptWithState*(
   modules: varargs[string];
   vmErrorHook = errorHook;
   stdPath = findNimStdlibCompileTime();
-  searchPaths: sink seq[string] = @[]) =
+  searchPaths: sink seq[string] = @[];
+  defines = defaultDefines) =
   ## Same as loadScriptWithState but saves state then loads the intepreter into `intr` if there were no script errors.
   ## Tries to keep the interpreter running.
   let state =
@@ -132,7 +139,7 @@ proc safeloadScriptWithState*(
       intr.get.saveState()
     else:
       @[]
-  let tempIntr = loadScript(script, addins, modules, vmErrorHook, stdPath, searchPaths)
+  let tempIntr = loadScript(script, addins, modules, vmErrorHook, stdPath, searchPaths, defines)
   if tempIntr.isSome:
     intr = tempIntr
     intr.get.loadState(state)

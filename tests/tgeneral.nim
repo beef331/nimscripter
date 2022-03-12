@@ -142,6 +142,23 @@ let defaultValueExists* = "foo"
     check defaultValue == 1
     check defaultValueExists == "foo"
 
-suite "Use Nimble":
+test "Use Nimble":
   let nimblePath = getHomeDir() / ".nimble" / "pkgs"
   let intr = loadScript(NimscriptFile"", searchPaths = @[nimblePath])
+
+import nimscripter/vmops
+test "cmpic issue":
+  const script = """
+import std/os ## <-- this import
+proc build*(): bool =
+  assert getCurrentDir().lastPathPart == "nimscripter"
+  true
+
+when isMainModule:
+  discard build()
+  """
+  addVmops(buildpackModule)
+  addCallable(buildpackModule):
+    proc build(): bool
+  const addins = implNimscriptModule(buildpackModule)
+  discard loadScript(NimScriptFile(script), addins)
