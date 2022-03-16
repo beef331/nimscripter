@@ -127,3 +127,15 @@ When using a custom search paths add the root file only, if you provide more tha
 
 ### Overriding the error hook
 
+The error hook can be overridden for more behaviour like showing the error in the program,
+the builtin error hook is as follows:
+```nim
+proc errorHook(config: ConfigRef; info: TLineInfo; msg: string; severity: Severity) {.gcsafe.} =
+  if severity == Error and config.error_counter >= config.error_max:
+    var fileName: string
+    for k, v in config.m.filenameToIndexTbl.pairs:
+      if v == info.fileIndex:
+        fileName = k
+    echo "Script Error: $1:$2:$3 $4." % [fileName, $info.line, $(info.col + 1), msg]
+    raise (ref VMQuit)(info: info, msg: msg)
+```
