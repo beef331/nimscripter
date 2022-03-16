@@ -14,7 +14,19 @@ const
 let intr = loadScript(ourScript, scriptProcs) # Load our script with our code and using our system `stdlib`(not portable)
 ```
 
-You also may need to create a `config.nims` with `--path:"$nim"` for the compiler api to work.
+Create a `config.nims` with `--path:"$nim"` for the compiler api to work.
+
+`exportTo` can take in multiple procedures, types, or global variables at once.
+```nim
+proc doThing(): int = 42
+var myGlobal = 30
+type MyType = enum
+  a, b, c
+exportTo(myImpl,
+  doThing
+  myGlobal,
+  myType)
+```
 
 ### Calling code from Nim
 Any exported non overloaded and non generic procedures can be called from Nim
@@ -39,7 +51,7 @@ intr.invoke(fancyStuff, 300) # Calls `fancyStuff(300)` in vm
 
 ### Getting global variables from nimscript
 
-You may extract global variables from a nimscript file using a convenience macro.
+One may extract global variables from a nimscript file using a convenience macro.
 
 ```nim
 import nimscripter, nimscripter/variables
@@ -72,6 +84,38 @@ exportCode(nimScripter):
  proc doThing(a, b: int) = echo a, " ", b # This runs on nimscript if called there
 ```
 
+### Keeping state inbetween loads
+
+`loadScriptWithState` will load a script, if it loads a valid script it will reset any global exported variables in the script with their preload values.
+
+`safeloadScriptWithState` will attempt to load a script keeping global state, if it fails it does not change the interpeter, else it'll load the script and set it's state to the interpreters.
+
+`saveState`/`loadState` can be used to manually manage the state inbetween loaded scripts.
+
+### VmOps
+
+A subset of the nimscript interopped procedures are available inside `nimscripter/vmops`.
+If you feel a new op should be added feel free to PR it.
+```nim
+import nimscripter
+import nimscripter/vmops
+
+const script = """
+proc build*(): bool =
+  echo "building nim... "
+  echo getCurrentDir()
+  echo "done"
+  true
+
+when isMainModule:
+  discard build()
+"""
+addVmops(buildpackModule)
+addCallable(buildpackModule):
+  proc build(): bool
+const addins = implNimscriptModule(buildpackModule)
+discard loadScript(NimScriptFile(script), addins)
+```
 
 ### Using a custom/shipped stdlib
 
@@ -79,3 +123,7 @@ Make a folder entitled `stdlib` and copy all Nim files you wish to ship as a std
 `system.nim` and the `system` folder are required.
 `You can copy any other pure libraries and ship them, though they're only usable if they support Nimscript.
 `If you use choosenim you can find the the Nim stdlib to copy from inside `~/.choosenim/toolchains/nim-version/lib`.
+When using a custom search paths add the root file only, if you provide more than that it will break modules.
+
+### Overriding the error hook
+
