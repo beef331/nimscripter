@@ -162,3 +162,41 @@ when isMainModule:
     proc build(): bool
   const addins = implNimscriptModule(buildpackModule)
   discard loadScript(NimScriptFile(script), addins)
+
+test "Export complex variables":
+  let
+    objA = ComplexObject(
+      someInt: -44,
+      someBool: true,
+      someString: "aaa",
+      secondaryBool: true,
+      someOtherString: "bbb"
+    )
+    objB = SomeVarObject(
+      kind: SomeEnum.c,
+      d: "somevar"
+    )
+    objC = RecObject(
+      next: RecObject(
+        next: RecObject(
+          b: {"a":"A", "b":"B"}.toTable()
+        )
+      )
+    )
+    enumA = SomeEnum.c
+
+  const script = """
+assert objA.someInt == -44
+assert objA.someBool == true
+assert objA.someString == "aaa"
+assert objA.secondaryBool == true
+assert objA.someOtherString == "bbb"
+assert enumA == SomeEnum.c
+assert objB.kind == SomeEnum.c
+assert objB.d == "somevar"
+assert objC.next.next.b["a"] == "A"
+assert objC.next.next.b["b"] == "B"
+"""
+  exportTo(objTestModule, SomeEnum, ComplexObject, SomeVarObject, RecObject, enumA, objA, objB, objC)
+  const addins = implNimscriptModule(objTestModule)
+  check loadScript(NimScriptFile(script), addins, modules=["std/tables"]).isSome
