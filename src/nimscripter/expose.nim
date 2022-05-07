@@ -288,7 +288,7 @@ proc generateModuleImpl(n: NimNode, genSym = false): NimNode =
         let
           procName = genSym($n)
           strName = $procName
-          typ = getType(n)
+          typ = getTypeInst(n)
           realName = n
           runCode = quote:
             proc `procName`(): `typ` = discard

@@ -17,7 +17,7 @@ type
   SomeEnum* {.pure.} = enum
     a, b, c, d
   SomeVarObject* = ref object
-    case kind: SomeEnum
+    case kind*: SomeEnum
     of a:
       b*: float
     of d:
