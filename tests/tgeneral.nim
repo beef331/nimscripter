@@ -8,11 +8,14 @@ suite("General A(fromFile)"):
   proc doStuff(a: ComplexObject) = compl = a
   proc doStuffA(a: SomeRef) = check a.a == 100
   proc doStuffB(a: seq[int]) = check a == @[10, 20, 30, 10, 50, 100]
+  proc doThingWithDist(a: DistType) = check int(a) == 100
 
   exportTo(test,
     doStuff,
     doStuffA,
     doStuffB,
+    doThingWithDist,
+    DistType,
     ComplexObject,
     SomeRef,
     RecObject,
@@ -22,6 +25,8 @@ suite("General A(fromFile)"):
   let intr = loadScript(NimScriptPath("tests/example/first.nims"), addins, modules = ["tables"])
 
   test("nums"):
+    check intr.invoke(testDistinct, DistType(100), returnType = DistType).int == 100
+
     check intr.invoke(getuint8, 128u8, returnType = uint8) == 128u8
     check intr.invoke(getint8, -123i8, returnType = int8) == -123i8
 

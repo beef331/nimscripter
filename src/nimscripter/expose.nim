@@ -76,14 +76,14 @@ proc getLambda*(pDef: NimNode, realProcName: Nimnode = nil): NimNode =
       result[^1].add quote do:
         let reg {.used.} = getReg(`vmArgs`, `argNum`)
         var `idnt`: `typ`
-        when `typ` is (SomeOrdinal or enum):
+        when `typ` is (SomeOrdinal or enum) or `typ`.distinctBase(true) is (SomeOrdinal or enum):
           case reg.kind:
           of rkInt:
             `idnt` = `typ`(reg.intVal)
           of rkNode:
             `idnt` = fromVm(typeof(`typ`), reg.node)
           else: discard
-        elif `typ` is SomeFloat:
+        elif `typ` is SomeFloat or `typ`.distinctBase(true) is (SomeFloat):
           case reg.kind:
           of rkFloat:
             `idnt` = `typ`(reg.floatVal)

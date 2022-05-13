@@ -27,3 +27,4 @@ type
   RecObject* = ref object
     next*: RecObject
     b*: Table[string, string]
+  DistType* = distinct int

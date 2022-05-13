@@ -9,6 +9,7 @@ let a* = ComplexObject(
 doStuff(a)
 doStuffA(SomeRef(a: 100))
 doStuffB(@[10, 20, 30, 10, 50, 100])
+doThingWithDist(DistType 100)
 
 proc testObj*(c: ComplexObject) =
   assert $c == "(someInt: 320, someBool: false, someIntTwo: 42)"
@@ -34,6 +35,8 @@ proc testTuple*(t: ((int, int), int, int, SomeRef)) =
   assert t[1] == 200
   assert t[2] == 300
   assert t[3].a == 300
+
+proc testDistinct*(t: DistType): DistType = t
 
 proc getCharSet*(s: set[char]): set[char] = s
 proc getByteSet*(s: set[byte]): set[byte] = s

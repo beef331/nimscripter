@@ -88,7 +88,7 @@ proc fromVm*[T: ref(not object)](obj: typedesc[T], vmNode: PNode): T
 
 proc fromVm*[T: proc](obj: typedesc[T], vmNode: PNode): T = nil
 
-proc fromVm*[T: distinct](obj: typedesc[T], vmNode: PNode): T = T(fromVm(distinctBase(T, true)))
+proc fromVm*[T: distinct](obj: typedesc[T], vmNode: PNode): T = T(fromVm(distinctBase(T, true), vmNode))
 
 proc fromVm*[T](obj: typedesc[seq[T]], vmNode: Pnode): seq[T] =
   if vmNode.kind in {nkBracket, nkBracketExpr}:
