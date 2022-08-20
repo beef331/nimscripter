@@ -98,7 +98,7 @@ proc loadScript*(
       additions.add script
       additions.add addins.postCodeAdditions
       when defined(debugScript):
-        echo additions
+        writeFile("debugscript.nims", additions)
       intr.evalScript(llStreamOpen(additions))
       result = option(intr)
     except VMQuit: discard
