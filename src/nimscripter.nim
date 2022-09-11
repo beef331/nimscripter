@@ -166,6 +166,7 @@ macro invokeDynamic*(intr: Interpreter; pName: string; args: varargs[typed];
     retNode = newStmtList()
     resultIdnt = ident"res"
     fromVm = bindSym"fromVm"
+    cachedIntrName = genSym(nskLet, "intr")
   if not returnType.eqIdent("void"):
     retNode.add nnkAsgn.newTree(resultIdnt, newCall(fromVm, returnType, retName))
     retNode.add resultIdnt
@@ -177,10 +178,10 @@ macro invokeDynamic*(intr: Interpreter; pName: string; args: varargs[typed];
     convs.add quote do:
       var `argSym`: array[`count`, PNode]
     nsCall = quote do:
-      `intr`.callRoutine(`nsProc`, `argSym`)
+      `cachedIntrName`.callRoutine(`nsProc`, `argSym`)
   else:
     nsCall = quote do:
-      `intr`.callRoutine(`nsProc`, [])
+      `cachedIntrName`.callRoutine(`nsProc`, [])
 
   for i, arg in args:
     convs.add quote do:
@@ -188,9 +189,12 @@ macro invokeDynamic*(intr: Interpreter; pName: string; args: varargs[typed];
 
   result = quote do:
     block:
+      let `cachedIntrName` = `intr`
+      when `cachedIntrName` is Option[Interpreter]:
+        assert `cachedIntrName`.isSome
       when `returnType` isnot void:
         var `resultIdnt`: `returnType`
-      let `nsProc` = `intr`.selectRoutine(`pName`)
+      let `nsProc` = `cachedIntrName`.selectRoutine(`pName`)
       if `nsProc` != nil:
         `convs`
         when `returnType` isnot void:
@@ -208,9 +212,6 @@ macro invoke*(intr: Option[Interpreter]; pName: untyped;
   for x in args:
     result.add x
   result.add nnkExprEqExpr.newTree(ident"returnType", returnType)
-  result = quote do:
-    assert `intr`.isSome
-    `result`
 
 macro invoke*(intr: Interpreter; pName: untyped;
     args: varargs[typed]; returnType: typedesc = void): untyped =

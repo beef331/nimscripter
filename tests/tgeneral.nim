@@ -169,7 +169,7 @@ when isMainModule:
   discard loadScript(NimScriptFile(script), addins)
 
 test "Export complex variables":
-  let
+  var
     objA = ComplexObject(
       someInt: -44,
       someBool: true,
@@ -205,3 +205,17 @@ assert objC.next.next.b["b"] == "B"
   exportTo(objTestModule, SomeEnum, ComplexObject, SomeVarObject, RecObject, enumA, objA, objB, objC)
   const addins = implNimscriptModule(objTestModule)
   check loadScript(NimScriptFile(script), addins, modules=["std/tables"]).isSome
+
+
+test "Ensure we cache intrpreters for a direct call":
+  const script = NimScriptFile"doThing(); proc fancyStuff*(a: int) = assert a == 10"
+  var i = 0
+  proc doThing() = inc i
+  addCallable(myTest):
+   proc fancyStuff(a: int)
+  exportTo(
+    myTest,
+    doThing)
+  const addins = implNimscriptModule(myTest)
+  loadScript(script, addins).invoke(fancyStuff, 10)
+  check i == 1
