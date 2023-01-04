@@ -298,15 +298,16 @@ proc generateModuleImpl(n: NimNode, genSym = false): NimNode =
           VmProcSignature(
               name: `strName`,
               vmRunImpl: `runImpl`,
-              vmProc: proc(vmArgs: VmArgs){.gcsafe.} =
-                when `typ` is (SomeOrdinal or enum):
-                  vmArgs.setResult(`n`.BiggestInt)
-                elif `typ` is SomeFloat:
-                  vmArgs.setResult(`n`.BiggestFloat)
-                elif `typ` is string:
-                  vmargs.setResult(`n`)
-                else:
-                  vmArgs.setResult(toVm(`n`))
+              vmProc: proc(vmArgs: VmArgs) =
+                {.cast(gcSafe).}:
+                  when `typ` is (SomeOrdinal or enum):
+                    vmArgs.setResult(`n`.BiggestInt)
+                  elif `typ` is SomeFloat:
+                    vmArgs.setResult(`n`.BiggestFloat)
+                  elif `typ` is string:
+                    vmargs.setResult(`n`)
+                  else:
+                    vmArgs.setResult(toVm(`n`))
             )
     of nnkClosedSymChoice:
       result = newStmtList()
