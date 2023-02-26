@@ -61,7 +61,7 @@ proc fromVm*(t: typedesc[SomeFloat], node: PNode): t =
     raiseParseError(t)
 
 proc fromVm*(t: typedesc[string], node: PNode): string =
-  if node.kind == nkStrLit:
+  if node.kind in {nkStrLit, nkTripleStrLit, nkRStrLit}:
     node.strVal
   else:
     raiseParseError(t)
