@@ -2,7 +2,9 @@
 Nimscripter is enables easy interop between Nim and Nimscript for realtime scriptable applications.
 
 ## How to use
-Install Nimscripter(`nimble install nimscripter`) with Nimble then create a .nim file with the following.
+First create a `config.nims` with `--path:"$nim"` in your project to use the Nim compiler api. This uses the local compiler version rather than the Nimble compiler package. 
+
+Next install Nimscripter(`nimble install nimscripter`) with Nimble then create a .nim file with the following.
 
 ```nim
 import nimscripter
@@ -14,9 +16,8 @@ const
 let intr = loadScript(ourScript, scriptProcs) # Load our script with our code and using our system `stdlib`(not portable)
 ```
 
-Create a `config.nims` with `--path:"$nim"` for the compiler api to work.
+Note that `exportTo` can take in multiple procedures, types, or global variables at once.
 
-`exportTo` can take in multiple procedures, types, or global variables at once.
 ```nim
 proc doThing(): int = 42
 var myGlobal = 30
