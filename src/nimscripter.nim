@@ -69,39 +69,51 @@ proc loadScript*(
   ## `vmErrorHook` a callback which should raise `VmQuit`, refer to `errorHook` for reference.
   ## `searchPaths` optional paths one can use to supply libraries or packages for the
   const isFile = script is NimScriptPath
-  if not isFile or fileExists(script.string):
-    var additions = addins.additions
-    for `mod` in modules: # Add modules
-      additions.insert("import " & `mod` & "\n", 0)
+  var searchPaths = getSearchPath(stdPath) & searchPaths
+  let
+    scriptName = when isFile: script.string.splitFile.name else: "script"
+    scriptDir = getTempDir() / scriptName
+    scriptNimble = scriptDir / scriptName.changeFileExt(".nimble")
+    scriptPath = scriptDir / scriptName.changeFileExt(".nim")
 
-    for uProc in addins.procs:
-      additions.add uProc.vmRunImpl
+  discard existsOrCreateDir(scriptDir)
+  writeFile(scriptNimble, "")
 
-    var searchPaths = getSearchPath(stdPath) & searchPaths
-    let scriptName = when isFile: script.string.splitFile.name else: "script"
+  let scriptFile = open(scriptPath, fmReadWrite)
 
-    when isFile: # If is file we want to enable relative imports
-      searchPaths.add script.string.parentDir
+  searchPaths.add scriptDir
 
 
-    let
-      intr = createInterpreter(scriptName, searchPaths, flags = {allowInfiniteLoops},
-        defines = defines
-      )
-      script = when isFile: readFile(script.string) else: script.string
+  for `mod` in modules: # Add modules
+    scriptFile.write("import " & `mod` & "\n")
 
-    for uProc in addins.procs:
-      intr.implementRoutine("*", scriptName, uProc.name, uProc.vmProc)
+  scriptFile.write addins.additions
 
-    intr.registerErrorHook(vmErrorHook)
-    try:
-      additions.add script
-      additions.add addins.postCodeAdditions
-      when defined(debugScript):
-        writeFile("debugscript.nims", additions)
-      intr.evalScript(llStreamOpen(additions))
-      result = option(intr)
-    except VMQuit: discard
+  for uProc in addins.procs:
+    scriptFile.write uProc.vmRunImpl
+
+  when script is NimScriptFile:
+    scriptFile.write string script
+  else:
+    scriptFile.write readFile(string script)
+    searchPaths.add script.string.parentDir
+
+  scriptFile.write addins.postCodeAdditions
+
+  let
+    intr = createInterpreter(scriptPath, searchPaths, flags = {allowInfiniteLoops},
+      defines = defines
+    )
+
+  for uProc in addins.procs:
+    intr.implementRoutine(scriptName, scriptName, uProc.name, uProc.vmProc)
+
+  intr.registerErrorHook(vmErrorHook)
+  try:
+    scriptFile.setFilePos(0)
+    intr.evalScript(llStreamOpen(scriptFile))
+    result = option(intr)
+  except VMQuit: discard
 
 proc loadScriptWithState*(
   intr: var Option[Interpreter];

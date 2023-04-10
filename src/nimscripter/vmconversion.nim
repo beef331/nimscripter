@@ -197,7 +197,6 @@ proc parseObject(body, vmNode, baseType: NimNode, offset: var int, fields: var s
   of nnkOfBranch:
     let
       conditions = body[0..^2]
-      preFieldSize = fields.len
       ofBody = newStmtList(parseObject(body[^1], vmNode, baseType, offset, fields))
     if body[^1].kind notin {nnkRecCase, nnkRecList}:
       let colons = collect(newSeq):
@@ -211,10 +210,8 @@ proc parseObject(body, vmNode, baseType: NimNode, offset: var int, fields: var s
       else:
         ofBody.add constr
     stmtlistAdd body.kind.newTree(conditions & @[ofBody])
-    fields.setLen(preFieldSize)
   of nnkElse:
     let
-      preFieldSize = fields.len
       elseBody = newStmtList(parseObject(body[0], vmNode, baseType, offset, fields))
       colons = collect(newSeq):
         for x in fields:
@@ -224,11 +221,11 @@ proc parseObject(body, vmNode, baseType: NimNode, offset: var int, fields: var s
 
     if elseBody[0].kind == nnkNilLit:
       elseBody[0] = constr
-    else:
+    elif (elseBody[0].kind == nnkStmtList and elseBody[0].len == 0) or elseBody[^1][^1].kind != nnkObjConstr:
       elseBody.add constr
 
     stmtlistAdd nnkElse.newTree(elseBody)
-    fields.setLen(preFieldSize)
+
   of nnkNilLit, nnkDiscardStmt:
     result = newStmtList()
   of nnkRecWhen:
