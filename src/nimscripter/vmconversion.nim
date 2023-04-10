@@ -161,15 +161,19 @@ proc parseObject(body, vmNode, baseType: NimNode, offset: var int, fields: var s
 
   case body.kind
   of nnkRecList:
-    for defs in body:
-      defs.addFields(fields)
+    let fieldStart = fields.len
+    for def in body:
+      def.addFields(fields)
     for defs in body:
       stmtlistAdd parseObject(defs, vmNode, baseType, offset, fields)
     if body.len == 0 or body[0].kind notin {nnkNilLit, nnkDiscardStmt}:
       addConstr(body)
+    fields.setLen(fieldStart)
   of nnkIdentDefs:
     let typ = body[^2]
     for def in body[0..^3]:
+      if def.baseSym() notin fields:
+        fields.add def.baseSym()
       let name = ident($def.baseSym)
       stmtlistAdd quote do:
         let `name` = fromVm(typeof(`typ`), `vmNode`[`offset`][1])
@@ -185,23 +189,48 @@ proc parseObject(body, vmNode, baseType: NimNode, offset: var int, fields: var s
     let caseStmt = nnkCaseStmt.newTree(descrimName)
     let preFieldSize = fields.len
     for subDefs in body[1..^1]:
+      let fieldSize = fields.len
       caseStmt.add parseObject(subDefs, vmNode, baseType, offset, fields)
+      fields.setLen(fieldSize)
     stmtlistAdd caseStmt
     fields.setLen(preFieldSize)
-  of nnkOfBranch, nnkElifBranch:
+  of nnkOfBranch:
     let
-      conditions = body[0]
+      conditions = body[0..^2]
       preFieldSize = fields.len
-      ofBody = parseObject(body[1], vmNode, baseType, offset, fields)
-    stmtlistAdd body.kind.newTree(conditions, ofBody)
+      ofBody = newStmtList(parseObject(body[^1], vmNode, baseType, offset, fields))
+    if body[^1].kind notin {nnkRecCase, nnkRecList}:
+      let colons = collect(newSeq):
+        for x in fields:
+          let desymd = ident($x)
+          nnkExprColonExpr.newTree(desymd, desymd)
+
+      let constr = nnkObjConstr.newTree(@[baseType] & colons)
+      if ofBody[0].kind == nnkNilLit:
+        ofBody[0] = constr
+      else:
+        ofBody.add constr
+    stmtlistAdd body.kind.newTree(conditions & @[ofBody])
     fields.setLen(preFieldSize)
   of nnkElse:
-    let preFieldSize = fields.len
-    stmtlistAdd nnkElse.newTree(parseObject(body[0], vmNode, baseType, offset, fields))
+    let
+      preFieldSize = fields.len
+      elseBody = newStmtList(parseObject(body[0], vmNode, baseType, offset, fields))
+      colons = collect(newSeq):
+        for x in fields:
+          let desymd = ident($x)
+          nnkExprColonExpr.newTree(desymd, desymd)
+      constr = nnkObjConstr.newTree(@[baseType] & colons)
+
+    if elseBody[0].kind == nnkNilLit:
+      elseBody[0] = constr
+    else:
+      elseBody.add constr
+
+    stmtlistAdd nnkElse.newTree(elseBody)
     fields.setLen(preFieldSize)
   of nnkNilLit, nnkDiscardStmt:
     result = newStmtList()
-    addConstr(result)
   of nnkRecWhen:
     if body[0][0].kind == nnkIdent and body[0][0].eqIdent"false":
       result = newEmptyNode()
