@@ -16,4 +16,5 @@ suite "case object tests":
       testPeg: Peg
     
     echo "testPeg: ", $testPeg
+    check $testPeg == "'hello'"
   
