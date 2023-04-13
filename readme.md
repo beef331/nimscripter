@@ -2,9 +2,7 @@
 Nimscripter is enables easy interop between Nim and Nimscript for realtime scriptable applications.
 
 ## How to use
-First create a `config.nims` with `--path:"$nim"` in your project to use the Nim compiler api. This uses the local compiler version rather than the Nimble compiler package. 
-
-Next install Nimscripter(`nimble install nimscripter`) with Nimble then create a .nim file with the following.
+Install Nimscripter(`nimble install nimscripter`) with Nimble then create a .nim file with the following.
 
 ```nim
 import nimscripter

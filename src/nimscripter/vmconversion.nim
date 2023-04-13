@@ -1,5 +1,5 @@
 import std/[macros, macrocache, sugar, typetraits, importutils]
-import compiler/[renderer, ast, idents]
+import "$nim"/compiler/[renderer, ast, idents]
 import assume/typeit
 
 type

@@ -1,4 +1,4 @@
-import compiler / [renderer, vmdef]
+import "$nim"/compiler/[renderer, vmdef]
 
 type
   VmProcSignature* = object

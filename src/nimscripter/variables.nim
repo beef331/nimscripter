@@ -1,5 +1,6 @@
-import std/[macros, options], nimscripter,
-    compiler/nimeval
+import std/[macros, options]
+import nimscripter
+import "$nim"/compiler/nimeval
 
 type SomeInterpreter = Option[Interpreter] or Interpreter
 

@@ -1,5 +1,5 @@
 import std/[macros, macrocache, typetraits]
-import compiler/[vmdef, vm]
+import "$nim"/compiler/[vmdef, vm]
 import vmconversion
 
 import vmaddins

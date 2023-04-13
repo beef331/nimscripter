@@ -1,6 +1,6 @@
 # Package
 
-version       = "1.0.20"
+version       = "1.0.21"
 author        = "Jason Beetham"
 description   = "A easy to use Nimscript interop package"
 license       = "MIT"

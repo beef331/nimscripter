@@ -1,8 +1,8 @@
-import compiler / [nimeval, renderer, ast, llstream, lineinfos, idents, types]
-import compiler / options as copts
+import "$nim"/compiler / [nimeval, renderer, ast, llstream, lineinfos, idents, types]
+import "$nim"/compiler / options as copts
 import std/[os, json, options, strutils, macros, tables]
 import nimscripter/[expose, vmaddins, vmconversion]
-from compiler/vmdef import TSandboxFlag
+from "$nim"/compiler/vmdef import TSandboxFlag
 export options, Interpreter, ast, lineinfos, idents, nimEval, expose, VMParseError
 
 const defaultDefines = @{"nimscript": "true", "nimconfig": "true"}
