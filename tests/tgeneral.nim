@@ -207,7 +207,7 @@ assert objC.next.next.b["b"] == "B"
   check loadScript(NimScriptFile(script), addins, modules=["std/tables"]).isSome
 
 
-test "Ensure we cache intrpreters for a direct call":
+test "Ensure we cache intepreters for a direct call":
   const script = NimScriptFile"doThing(); proc fancyStuff*(a: int) = assert a == 10"
   var i = 0
   proc doThing() = inc i

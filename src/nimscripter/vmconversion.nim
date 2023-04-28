@@ -1,4 +1,4 @@
-import std/[macros, macrocache, sugar, typetraits, importutils]
+import std/[macros, macrocache, typetraits]
 import "$nim"/compiler/[renderer, ast, idents]
 import assume/typeit
 
@@ -125,120 +125,6 @@ proc baseSym(n: NimNode): NimNode =
   else:
     n.basename
 
-proc addFields(n: NimNode, fields: var seq[NimNode]) =
-  case n.kind
-  of nnkRecCase:
-    fields.add n[0][0].baseSym
-  of nnkIdentDefs:
-    for def in n[0..^3]:
-      fields.add def.baseSym
-  else:
-    discard
-
-proc parseObject(body, vmNode, baseType: NimNode, offset: var int, fields: var seq[
-    NimNode]): NimNode =
-  ## Emits the VmNode -> Object constructor so the function can be called
-
-  template stmtlistAdd(body: NimNode) =
-    if result.kind == nnkNilLit:
-      result = body
-    elif result.kind != nnkStmtList:
-      result = newStmtList(result, body)
-    else:
-      result.add body
-
-  template addConstr(n: NimNode) =
-    if not n.hasRecCase:
-      let colons = collect(newSeq):
-        for x in fields:
-          let desymd = ident($x)
-          nnkExprColonExpr.newTree(desymd, desymd)
-      if result.kind == nnkNilLit:
-        result = newStmtList()
-      let constr = nnkObjConstr.newTree(baseType)
-      constr.add colons
-      stmtlistAdd(constr)
-
-  case body.kind
-  of nnkRecList:
-    let fieldStart = fields.len
-    for def in body:
-      def.addFields(fields)
-    for defs in body:
-      stmtlistAdd parseObject(defs, vmNode, baseType, offset, fields)
-    if body.len == 0 or body[0].kind notin {nnkNilLit, nnkDiscardStmt}:
-      addConstr(body)
-    fields.setLen(fieldStart)
-  of nnkIdentDefs:
-    let typ = body[^2]
-    for def in body[0..^3]:
-      if def.baseSym() notin fields:
-        fields.add def.baseSym()
-      let name = ident($def.baseSym)
-      stmtlistAdd quote do:
-        let `name` = fromVm(typeof(`typ`), `vmNode`[`offset`][1])
-      inc offset
-  of nnkRecCase:
-    let
-      descrimName = ident($body[0][0].baseSym)
-      typ = body[0][1]
-    stmtlistAdd quote do:
-      let `descrimName` = fromVm(typeof(`typ`), `vmNode`[`offset`][1])
-
-    inc offset
-    let caseStmt = nnkCaseStmt.newTree(descrimName)
-    let preFieldSize = fields.len
-    for subDefs in body[1..^1]:
-      let fieldSize = fields.len
-      caseStmt.add parseObject(subDefs, vmNode, baseType, offset, fields)
-      fields.setLen(fieldSize)
-    stmtlistAdd caseStmt
-    fields.setLen(preFieldSize)
-  of nnkOfBranch:
-    let
-      conditions = body[0..^2]
-      ofBody = newStmtList(parseObject(body[^1], vmNode, baseType, offset, fields))
-    if body[^1].kind notin {nnkRecCase, nnkRecList}:
-      let colons = collect(newSeq):
-        for x in fields:
-          let desymd = ident($x)
-          nnkExprColonExpr.newTree(desymd, desymd)
-
-      let constr = nnkObjConstr.newTree(@[baseType] & colons)
-      if ofBody[0].kind == nnkNilLit:
-        ofBody[0] = constr
-      else:
-        ofBody.add constr
-    stmtlistAdd body.kind.newTree(conditions & @[ofBody])
-  of nnkElse:
-    let
-      elseBody = newStmtList(parseObject(body[0], vmNode, baseType, offset, fields))
-      colons = collect(newSeq):
-        for x in fields:
-          let desymd = ident($x)
-          nnkExprColonExpr.newTree(desymd, desymd)
-      constr = nnkObjConstr.newTree(@[baseType] & colons)
-
-    if elseBody[0].kind == nnkNilLit:
-      elseBody[0] = constr
-    elif (elseBody[0].kind == nnkStmtList and elseBody[0].len == 0) or elseBody[^1][^1].kind != nnkObjConstr:
-      elseBody.add constr
-
-    stmtlistAdd nnkElse.newTree(elseBody)
-
-  of nnkNilLit, nnkDiscardStmt:
-    result = newStmtList()
-  of nnkRecWhen:
-    if body[0][0].kind == nnkIdent and body[0][0].eqIdent"false":
-      result = newEmptyNode()
-    else:
-      error("Nimscripter cannot support objects that use when statments. A proc that uses this object is the issue.", body)
-  else: discard
-
-proc parseObject(body, vmNode, baseType: NimNode, offset: var int): NimNode =
-  var fields: seq[NimNode]
-  result = parseObject(body, vmNode, baseType, offset, fields)
-
 proc replaceGenerics(n: NimNode, genTyp: seq[(NimNode, NimNode)]) =
   ## Replaces all instances of a typeclass with a generic type,
   ## used in generated headers for the VM.
@@ -251,77 +137,24 @@ proc replaceGenerics(n: NimNode, genTyp: seq[(NimNode, NimNode)]) =
     else:
       replaceGenerics(x, genTyp)
 
-macro fromVmImpl[T: object](obj: typedesc[T], vmNode: PNode): untyped =
-  let
-    typ = newCall(ident"typeof", obj)
-    recList = block:
-      let extracted = obj.extractType
-      if extracted.len > 0:
-        let
-          impl = extracted[0].getImpl
-          recList = extracted[0].getImpl[^1][^1].copyNimTree
-          genParams = collect(newSeq):
-            for i, x in impl[1]:
-              (x, extracted[i + 1])
-        recList.replaceGenerics(genParams)
-        recList
-      else:
-        extracted.getImpl[^1][^1]
-  var offset = 1
-  result = newStmtList(newCall(bindSym"privateAccess", typ)):
-    parseObject(recList, vmNode, typ, offset)
-  if result[^1].kind == nnkNilLit:
-    result = quote do:
-      default(`obj`)
-
-proc getRefRecList(n: NimNode): NimNode =
-  if n.len > 0:
-    let
-      impl = n[0].getImpl
-      recList = n[0].getImpl[^1][^1].copyNimTree
-      genParams = collect(newSeq):
-        for i, x in impl[1]:
-          (x, n[i + 1])
-    recList.replaceGenerics(genParams)
-    result = recList
-  else:
-    let recList = n.getImpl[^1][^1]
-    if recList.kind == nnkSym:
-      result = recList.getTypeImpl[^1]
-    else:
-      result = recList[^1]
-
-macro fromVmImpl[T: ref object](obj: typedesc[T], vmNode: PNode): untyped =
-  let
-    typ = extractType(obj)
-    recList = getRefRecList(typ)
-    typConv = newCall(ident"typeof", typ)
-  var offset = 1
-  result = newStmtList(newCall(bindSym"privateAccess", typConv)):
-    parseObject(recList, vmNode, typ, offset)
-  if result[^1].kind != nnkNilLit:
-    # In the case we dont have fields we dont want the `parseObject` logic
-    result = quote do:
-      if `vmNode`.kind == nkNilLit:
-        typeof(`obj`)(nil)
-      else:
-        `result`
-  else:
-    result = quote do:
-      if `vmNode`.kind == nkNilLit:
-        typeof(`obj`)(nil)
-      else:
-        `obj`()
-
 proc fromVm*[T: object](obj: typedesc[T], vmNode: PNode): T =
   if vmNode.kind == nkObjConstr:
-    fromVmImpl(obj, vmnode)
+    var ind = 1
+    typeIt(result, {titAllFields, titDeclaredOrder}):
+      if it.isAccessible:
+        {.cast(uncheckedAssign).}:
+          it = fromVm(typeof(it), vmNode[ind][1])
+      inc ind
   else:
     raiseParseError(T)
 
 proc fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): T =
-  if vmNode.kind in {nkObjConstr, nkNilLit}:
-    fromVmImpl(obj, vmnode)
+  case vmNode.kind
+  of nkNilLit:
+    result = nil
+  of nkObjConstr:
+    new result
+    result[] = fromVm(typeof(result[]), vmNode)
   else:
     raiseParseError(T)
 
