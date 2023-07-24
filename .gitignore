@@ -2,6 +2,9 @@
 !*.*
 !*/
 *.dll
+*.lib
+*.a
+*.so
 *.exe
 *.kate-swap
 nimcache/
