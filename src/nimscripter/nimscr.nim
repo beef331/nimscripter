@@ -185,9 +185,36 @@ proc nimscripter_load_string*(
   except VMQuit:
     discard
 
-proc nimscripter_destroy_intepreter*(intr: Interpreter) {.exportc.} =
+proc nimscripter_destroy_interpreter*(intr: Interpreter) {.exportc, dynlib.} =
   GC_unref(intr)
   destroyInterpreter(intr)
 
+proc nimscripter_int_node*(val: int): PNode {.exportc, dynlib.} = newIntNode(nkIntLit, val.BiggestInt)
+proc nimscripter_int8_node*(val: int8): PNode {.exportc, dynlib.} = newIntNode(nkInt8Lit, val.BiggestInt)
+proc nimscripter_int16_node*(val: int16): PNode {.exportc, dynlib.} = newIntNode(nkInt16Lit, val.BiggestInt)
+proc nimscripter_int32_node*(val: int32): PNode {.exportc, dynlib.} = newIntNode(nkInt32Lit, val.BiggestInt)
+proc nimscripter_int64_node*(val: int64): PNode {.exportc, dynlib.} = newIntNode(nkInt64Lit, val.BiggestInt)
+
+proc nimscripter_uint_node*(val: uint): PNode {.exportc, dynlib.} = newIntNode(nkuIntLit, val.BiggestInt)
+proc nimscripter_uint8_node*(val: uint8): PNode {.exportc, dynlib.} = newIntNode(nkuInt8Lit, val.BiggestInt)
+proc nimscripter_uint16_node*(val: uint16): PNode {.exportc, dynlib.} = newIntNode(nkuInt16Lit, val.BiggestInt)
+proc nimscripter_uint32_node*(val: uint32): PNode {.exportc, dynlib.} = newIntNode(nkuInt32Lit, val.BiggestInt)
+proc nimscripter_uint64_node*(val: uint64): PNode {.exportc, dynlib.} = newIntNode(nkuInt64Lit, val.BiggestInt)
 
 
+proc nimscripter_float_node*(val: float32): PNode {.exportc, dynlib.} = newFloatNode(nkFloat32Lit, val.BiggestFloat)
+proc nimscripter_double_node*(val: float): PNode {.exportc, dynlib.} = newFloatNode(nkFloat64Lit, val.BiggestFloat)
+
+proc nimscripter_string_node*(val: cstring): PNode {.exportc, dynlib.} = newStrNode(nkStrLit, $val)
+
+proc nimscripter_destroy_pnode*(val: PNode) {.exportc, dynlib.} =
+  GcUnref(val)
+
+
+proc nimscripter_invoke*(intr: Interpreter, name: cstring, args: ptr UncheckedArray[PNode], count: int): PNode {.exportc, dynlib.} =
+  let prcSym = intr.selectRoutine($name)
+  if prcSym != nil:
+    if count > 0:
+      result = intr.callRoutine(prcSym, args.toOpenArray(0, count))
+    else:
+      result = intr.callRoutine(prcSym, [])  
