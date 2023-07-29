@@ -60,7 +60,23 @@ extern nimscripter_pnode_t nimscripter_double_node(double);
 
 extern nimscripter_pnode_t nimscripter_string_node(char *);
 
-extern nimscripter_pnode_t nimscripter_invoke(nimscripter_interpreter_t, char *,
-                                              nimscripter_pnode_t *, intptr_t);
+extern nimscripter_pnode_t nimscripter_pnode_index(nimscripter_pnode_t,
+                                                   intptr_t);
+extern nimscripter_pnode_t nimscripter_pnode_index_field(nimscripter_pnode_t,
+                                                         intptr_t);
+
+extern nimscripter_pnode_t nimscripter_pnode_get_int(nimscripter_pnode_t,
+                                                     intptr_t *);
+
+extern nimscripter_pnode_t nimscripter_pnode_get_double(nimscripter_pnode_t,
+                                                        double *);
+extern nimscripter_pnode_t nimscripter_pnode_get_float(nimscripter_pnode_t,
+                                                       float *);
+
+extern nimscripter_pnode_t nimscripter_pnode_get_string(nimscripter_pnode_t,
+                                                        char **);
 
 extern void nimscripter_destroy_pnode(nimscripter_pnode_t);
+
+extern nimscripter_pnode_t nimscripter_invoke(nimscripter_interpreter_t, char *,
+                                              nimscripter_pnode_t *, intptr_t);
