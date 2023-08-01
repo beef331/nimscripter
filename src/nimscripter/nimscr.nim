@@ -208,6 +208,11 @@ proc nimscripter_destroy_interpreter*(intr: Interpreter) {.nimscrexport.} =
   GC_unref(intr)
   destroyInterpreter(intr)
 
+proc nimscripter_new_node*(kind: TNodeKind): WrappedPNode {.nimscrexport.} = newNode(kind)
+
+proc nimscripter_pnode_add*(node, toAdd: WrappedPNode) {.nimscrexport.} = PNode(node).add toAdd
+
+
 proc nimscripter_int_node*(val: int): WrappedPNode {.nimscrexport.} = newIntNode(nkIntLit, val.BiggestInt)
 proc nimscripter_int8_node*(val: int8): WrappedPNode {.nimscrexport.} = newIntNode(nkInt8Lit, val.BiggestInt)
 proc nimscripter_int16_node*(val: int16): WrappedPNode {.nimscrexport.} = newIntNode(nkInt16Lit, val.BiggestInt)

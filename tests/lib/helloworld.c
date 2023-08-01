@@ -15,7 +15,9 @@ int main() {
 
   const char *myScript = "echo %*{\"a\": \"Hello World\"}\n"
                          "proc doThing*(): int = echo \"Huh\";result = 30\n"
-                         "proc doOtherThing*(a: int): string = $a\n";
+                         "proc doOtherThing*(a: int): string = $a\n"
+                         "proc arrTest*(arr: openArray[int]): bool ="
+                         "  echo arr; arr == [0, 1, 2, 3, 4]";
 
   nimscripter_interpreter_t intr = nimscripter_load_string(
       myScript, addins, &modules, 1, 0, 0,
@@ -41,7 +43,19 @@ int main() {
   printf("%s\n", myStr);
 
   assert(nimscripter_pnode_get_kind(ret) == nkStrLit);
+  nimscripter_destroy_pnode(ret);
+  nimscripter_destroy_pnode(input);
 
+  input = nimscripter_new_node(nkBracket);
+
+  for (int i = 0; i < 5; i++) {
+    nimscripter_pnode_add(input, nimscripter_int_node(i));
+  }
+
+  ret = nimscripter_invoke(intr, "arrTest", &input, 1);
+
+  intptr_t passed = 0;
+  assert(nimscripter_pnode_get_int(ret, &passed) && (bool)passed);
   nimscripter_destroy_pnode(ret);
   nimscripter_destroy_pnode(input);
 

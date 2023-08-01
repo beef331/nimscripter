@@ -1,4 +1,5 @@
 #include "nimscr_kinds.h"
+#include <stdbool.h>
 #include <stdint.h>
 
 typedef struct pnode *nimscripter_pnode_t;
@@ -44,6 +45,10 @@ nimscripter_load_string(char *, nimscripter_addins_t, char **, intptr_t,
 
 extern void nimscripter_destroy_interpreter(nimscripter_interpreter_t);
 
+extern nimscripter_pnode_t nimscripter_new_node(uint8_t);
+
+extern void nimscripter_pnode_add(nimscripter_pnode_t, nimscripter_pnode_t);
+
 extern nimscripter_pnode_t nimscripter_int_node(intptr_t);
 extern nimscripter_pnode_t nimscripter_int8_node(int8_t);
 extern nimscripter_pnode_t nimscripter_int16_node(int16_t);
@@ -66,16 +71,12 @@ extern nimscripter_pnode_t nimscripter_pnode_index(nimscripter_pnode_t,
 extern nimscripter_pnode_t nimscripter_pnode_index_field(nimscripter_pnode_t,
                                                          intptr_t);
 
-extern nimscripter_pnode_t nimscripter_pnode_get_int(nimscripter_pnode_t,
-                                                     intptr_t *);
+extern bool nimscripter_pnode_get_int(nimscripter_pnode_t, intptr_t *);
 
-extern nimscripter_pnode_t nimscripter_pnode_get_double(nimscripter_pnode_t,
-                                                        double *);
-extern nimscripter_pnode_t nimscripter_pnode_get_float(nimscripter_pnode_t,
-                                                       float *);
+extern bool nimscripter_pnode_get_double(nimscripter_pnode_t, double *);
+extern bool nimscripter_pnode_get_float(nimscripter_pnode_t, float *);
 
-extern nimscripter_pnode_t nimscripter_pnode_get_string(nimscripter_pnode_t,
-                                                        char **);
+extern bool nimscripter_pnode_get_string(nimscripter_pnode_t, char **);
 
 extern uint8_t nimscripter_pnode_get_kind(nimscripter_pnode_t);
 
