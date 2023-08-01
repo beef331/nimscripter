@@ -1,3 +1,4 @@
+#include "nimscr_kinds.h"
 #include <stdint.h>
 
 typedef struct pnode *nimscripter_pnode_t;
@@ -75,6 +76,8 @@ extern nimscripter_pnode_t nimscripter_pnode_get_float(nimscripter_pnode_t,
 
 extern nimscripter_pnode_t nimscripter_pnode_get_string(nimscripter_pnode_t,
                                                         char **);
+
+extern uint8_t nimscripter_pnode_get_kind(nimscripter_pnode_t);
 
 extern void nimscripter_destroy_pnode(nimscripter_pnode_t);
 

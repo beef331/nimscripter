@@ -1,4 +1,5 @@
 #include "nimscr.h"
+#include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -31,11 +32,15 @@ int main() {
 
   nimscripter_pnode_t input = nimscripter_int_node(500);
 
+  assert(nimscripter_pnode_get_kind(ret) == nkIntLit);
+
   ret = nimscripter_invoke(intr, "doOtherThing", &input, 1);
 
   char *myStr = "";
   nimscripter_pnode_get_string(ret, &myStr);
   printf("%s\n", myStr);
+
+  assert(nimscripter_pnode_get_kind(ret) == nkStrLit);
 
   nimscripter_destroy_pnode(ret);
   nimscripter_destroy_pnode(input);
