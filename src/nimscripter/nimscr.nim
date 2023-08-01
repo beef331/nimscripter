@@ -3,6 +3,7 @@
 ## A lot of duplicated code that is done in a smarter safer way.
 import "$nim"/compiler / [nimeval, renderer, ast, llstream, lineinfos, options, vmdef]
 import std/[os, strformat, sugar, tables]
+export Severity, TNodeKind
 
 
 
@@ -10,9 +11,8 @@ import std/[os, strformat, sugar, tables]
 const
   isLib = defined(nimscripterlib)
 
-
 when isLib:
-  {.pragma: nimscrexport, exportc, dynlib, cdecl}
+  {.pragma: nimscrexport, exportc"nimscripter_$1", dynlib, cdecl}
 else:
   const
     nimscrlib =
@@ -22,7 +22,7 @@ else:
         "nimscr.dll"
       else: # TODO: Add BSD and other OS support
         "nimscr.dylib"
-  {.pragma: nimscrexport, importc, dynlib: nimscrlib, cdecl}
+  {.pragma: nimscrexport, importc:"nimscripter_$1", dynlib: nimscrlib, cdecl}
 
 
 type
@@ -44,13 +44,16 @@ type
   VmQuit = object of CatchableError
   WrappedPNode* = distinct PNode
 
+proc define*(a, b: static cstring): Defines = Defines(left: a, right: b)
+
+const defaultDefines* = [define("nimscript", "true"), define("nimconfig", "true")]
 proc `=destroy`*(pnode: WrappedPNode)
 
-proc nimscripter_destroy_pnode*(val: WrappedPNode) {.nimscrexport.} =
+proc destroyPnode*(val: WrappedPNode) {.nimscrexport.} =
   GcUnref(PNode(val))
 
 proc `=destroy`*(pnode: WrappedPNode) = 
-  nimscripter_destroy_pnode(pnode)
+  destroyPnode(pnode)
 
 
 converter toPNode*(wrapped: WrappedPNode): PNode = PNode(wrapped)
@@ -71,9 +74,9 @@ proc convertSearchPaths(paths: openArray[cstring]): seq[string] =
     result.add $path 
 
 when isLib:
-  var nimscripter_error_hook {.exportc, dynlib.}: ErrorHook
+  var errorHook* {.exportc: "nimscripter_$1", dynlib.}: ErrorHook
 else:
-  var nimscripter_error_hook {.importc, dynlib: nimscrlib.}: ErrorHook
+  var errorHook* {.importc:"nimscripter_$1", dynlib: nimscrlib.}: ErrorHook
 
 proc implementAddins(intr: Interpreter, scriptFile: File, scriptName: string, modules: openarray[cstring], addins: VmAddins) =
  
@@ -90,7 +93,7 @@ proc implementAddins(intr: Interpreter, scriptFile: File, scriptName: string, mo
         uProc.vmProc(args)
       intr.implementRoutine(scriptName, scriptName, $uProc.name, anonProc)
 
-proc nimscripter_load_script*(
+proc loadScript*(
   script: cstring;
   addins: VMAddins;
   modules: openArray[cstring];
@@ -136,8 +139,8 @@ proc nimscripter_load_script*(
           fileName = k
 
       {.cast(gcSafe).}:
-        if nimscripter_error_hook != nil:
-          nimscripter_error_hook(cstring fileName, int info.line, int info.col, msg, sev)
+        if errorHook != nil:
+          errorHook(cstring fileName, int info.line, int info.col, msg, sev)
 
       raise (ref VMQuit)(msg: msg)
 
@@ -148,7 +151,7 @@ proc nimscripter_load_script*(
   except VMQuit:
     discard
 
-proc nimscripter_load_string*(
+proc loadString*(
   str: cstring;
   addins: VMAddins;
   modules: openArray[cstring];
@@ -192,8 +195,8 @@ proc nimscripter_load_string*(
           fileName = k
 
       {.cast(gcSafe).}:
-        if nimscripter_error_hook != nil:
-          nimscripter_error_hook(cstring fileName, int info.line, int info.col, msg, sev)
+        if errorHook != nil:
+          errorHook(cstring fileName, int info.line, int info.col, msg, sev)
 
       raise (ref VMQuit)(msg: msg)
 
@@ -204,71 +207,73 @@ proc nimscripter_load_string*(
   except VMQuit:
     discard
 
-proc nimscripter_destroy_interpreter*(intr: Interpreter) {.nimscrexport.} =
+proc destroyInterpreter*(intr: Interpreter) {.nimscrexport.} =
   GC_unref(intr)
-  destroyInterpreter(intr)
+  nimeval.destroyInterpreter(intr)
 
-proc nimscripter_new_node*(kind: TNodeKind): WrappedPNode {.nimscrexport.} = newNode(kind)
+proc newNode*(kind: TNodeKind): WrappedPNode {.nimscrexport.} = ast.newNode(kind)
 
-proc nimscripter_pnode_add*(node, toAdd: WrappedPNode) {.nimscrexport.} = PNode(node).add toAdd
-
-
-proc nimscripter_int_node*(val: int): WrappedPNode {.nimscrexport.} = newIntNode(nkIntLit, val.BiggestInt)
-proc nimscripter_int8_node*(val: int8): WrappedPNode {.nimscrexport.} = newIntNode(nkInt8Lit, val.BiggestInt)
-proc nimscripter_int16_node*(val: int16): WrappedPNode {.nimscrexport.} = newIntNode(nkInt16Lit, val.BiggestInt)
-proc nimscripter_int32_node*(val: int32): WrappedPNode {.nimscrexport.} = newIntNode(nkInt32Lit, val.BiggestInt)
-proc nimscripter_int64_node*(val: int64): WrappedPNode {.nimscrexport.} = newIntNode(nkInt64Lit, val.BiggestInt)
-
-proc nimscripter_uint_node*(val: uint): WrappedPNode {.nimscrexport.} = newIntNode(nkuIntLit, val.BiggestInt)
-proc nimscripter_uint8_node*(val: uint8): WrappedPNode {.nimscrexport.} = newIntNode(nkuInt8Lit, val.BiggestInt)
-proc nimscripter_uint16_node*(val: uint16): WrappedPNode {.nimscrexport.} = newIntNode(nkuInt16Lit, val.BiggestInt)
-proc nimscripter_uint32_node*(val: uint32): WrappedPNode {.nimscrexport.} = newIntNode(nkuInt32Lit, val.BiggestInt)
-proc nimscripter_uint64_node*(val: uint64): WrappedPNode {.nimscrexport.} = newIntNode(nkuInt64Lit, val.BiggestInt)
+proc pnodeAdd*(node, toAdd: WrappedPNode) {.nimscrexport.} = PNode(node).add toAdd
 
 
-proc nimscripter_float_node*(val: float32): WrappedPNode {.nimscrexport.} = newFloatNode(nkFloat32Lit, val.BiggestFloat)
-proc nimscripter_double_node*(val: float): WrappedPNode {.nimscrexport.} = newFloatNode(nkFloat64Lit, val.BiggestFloat)
+proc intNode*(val: int): WrappedPNode {.nimscrexport.} = newIntNode(nkIntLit, val.BiggestInt)
+proc int8Node*(val: int8): WrappedPNode {.nimscrexport.} = newIntNode(nkInt8Lit, val.BiggestInt)
+proc int16Node*(val: int16): WrappedPNode {.nimscrexport.} = newIntNode(nkInt16Lit, val.BiggestInt)
+proc int32Node*(val: int32): WrappedPNode {.nimscrexport.} = newIntNode(nkInt32Lit, val.BiggestInt)
+proc int64Node*(val: int64): WrappedPNode {.nimscrexport.} = newIntNode(nkInt64Lit, val.BiggestInt)
 
-proc nimscripter_string_node*(val: cstring): WrappedPNode {.nimscrexport.} = newStrNode(nkStrLit, $val)
+proc uintNode*(val: uint): WrappedPNode {.nimscrexport.} = newIntNode(nkuIntLit, val.BiggestInt)
+proc uint8Node*(val: uint8): WrappedPNode {.nimscrexport.} = newIntNode(nkuInt8Lit, val.BiggestInt)
+proc uint16Node*(val: uint16): WrappedPNode {.nimscrexport.} = newIntNode(nkuInt16Lit, val.BiggestInt)
+proc uint32Node*(val: uint32): WrappedPNode {.nimscrexport.} = newIntNode(nkuInt32Lit, val.BiggestInt)
+proc uint64Node*(val: uint64): WrappedPNode {.nimscrexport.} = newIntNode(nkuInt64Lit, val.BiggestInt)
 
 
-proc nimscripter_pnode_index*(val: WrappedPNode, ind: int): WrappedPNode {.nimscrexport.} =
+proc floatNode*(val: float32): WrappedPNode {.nimscrexport.} = newFloatNode(nkFloat32Lit, val.BiggestFloat)
+proc doubleNode*(val: float): WrappedPNode {.nimscrexport.} = newFloatNode(nkFloat64Lit, val.BiggestFloat)
+
+proc stringNode*(val: cstring): WrappedPNode {.nimscrexport.} = newStrNode(nkStrLit, $val)
+
+
+proc pnodeIndex*(val: WrappedPNode, ind: int): WrappedPNode {.nimscrexport.} =
   if val.len < ind:
     result = val[ind]
 
-proc nimscripter_pnode_index_field*(val: WrappedPNode, ind: int): WrappedPNode {.nimscrexport.} =
+proc pnodeIndexField*(val: WrappedPNode, ind: int): WrappedPNode {.nimscrexport.} =
   if val.len < ind and val[ind].len == 2:
     result = val[ind][1]
 
-proc nimscripter_pnode_get_int*(val: WrappedPNode, dest: var BiggestInt): bool {.nimscrexport.} =
+proc pnodeGetInt*(val: WrappedPNode, dest: var BiggestInt): bool {.nimscrexport.} =
   if PNode(val).kind in {nkCharLit..nkUInt64Lit}:
     result = true
     dest = PNode(val).intVal
 
-proc nimscripter_pnode_get_double*(val: WrappedPNode, dest: var BiggestFloat): bool {.nimscrexport.} =
+proc pnodeGetDouble*(val: WrappedPNode, dest: var BiggestFloat): bool {.nimscrexport.} =
   if PNode(val).kind in {nkFloatLit..nkFloat64Lit}:
     result = true
     dest = PNode(val).floatVal
 
-proc nimscripter_pnode_get_float*(val: WrappedPNode, dest: var float32): bool {.nimscrexport.} =
+proc pnodeGetFloat*(val: WrappedPNode, dest: var float32): bool {.nimscrexport.} =
   if PNode(val).kind in {nkFloatLit..nkFloat64Lit}:
     result = true
     dest = float32 PNode(val).floatVal
 
-proc nimscripter_pnode_get_string*(val: WrappedPNode, dest: var cstring): bool {.nimscrexport.} =
+proc pnodeGetString*(val: WrappedPNode, dest: var cstring): bool {.nimscrexport.} =
   if PNode(val).kind in {nkStrLit..nkTripleStrLit}:
     result = true
     dest = cstring PNode(val).strVal
 
-proc nimscripter_invoke*(intr: Interpreter, name: cstring, args: ptr UncheckedArray[WrappedPNode], count: int): WrappedPNode {.nimscrexport.} =
+proc invoke*(intr: Interpreter, name: cstring, args: openArray[WrappedPNode]): WrappedPNode {.nimscrexport.} =
   let prcSym = intr.selectRoutine($name)
   if prcSym != nil:
-    if count > 0:
-      result = intr.callRoutine(prcSym, cast[ptr UncheckedArray[PNode]](args).toOpenArray(0, count - 1))
+    if args.len == 0:
+      result = callRoutine(intr, prcSym, [])
     else:
-      result = intr.callRoutine(prcSym, [])
+      let arr = cast[ptr UncheckedArray[PNode]](args[0].addr)
+      result = callRoutine(intr, prcSym, arr.toOpenArray(0, args.high))
 
-proc nimscripter_pnode_get_kind*(node: WrappedPNode): TNodeKind {.nimscrexport.} = PNode(node).kind
+
+proc pnodeGetKind*(node: WrappedPNode): TNodeKind {.nimscrexport.} = PNode(node).kind
 
 when isLib:
   static: # Generate the kind enum

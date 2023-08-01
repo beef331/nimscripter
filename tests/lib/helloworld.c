@@ -10,7 +10,7 @@ void my_error_hook(char *filename, intptr_t line, intptr_t col, char *msg,
 
 int main() {
   nimscripter_addins_t addins = {};
-  nimscripter_error_hook = my_error_hook;
+  nimscripter_errorHook = my_error_hook;
   char *modules = "json";
 
   const char *myScript = "echo %*{\"a\": \"Hello World\"}\n"
@@ -19,46 +19,46 @@ int main() {
                          "proc arrTest*(arr: openArray[int]): bool ="
                          "  echo arr; arr == [0, 1, 2, 3, 4]";
 
-  nimscripter_interpreter_t intr = nimscripter_load_string(
-      myScript, addins, &modules, 1, 0, 0,
-      "/home/jason/.choosenim/toolchains/nim-#devel/lib",
-      &nimscripter_default_defines[0], 2);
+  nimscripter_interpreter_t intr =
+      nimscripter_loadString(myScript, addins, &modules, 1, 0, 0,
+                             "/home/jason/.choosenim/toolchains/nim-#devel/lib",
+                             &nimscripter_default_defines[0], 2);
 
   nimscripter_pnode_t ret = nimscripter_invoke(intr, "doThing", 0, 0);
   intptr_t myVal = 0;
-  nimscripter_pnode_get_int(ret, &myVal);
+  nimscripter_pnodeGetInt(ret, &myVal);
 
   printf("%ld\n", myVal);
 
-  nimscripter_destroy_pnode(ret);
+  nimscripter_destroyPnode(ret);
 
-  nimscripter_pnode_t input = nimscripter_int_node(500);
+  nimscripter_pnode_t input = nimscripter_intNode(500);
 
-  assert(nimscripter_pnode_get_kind(ret) == nkIntLit);
+  assert(nimscripter_pnodeGetKind(ret) == nkIntLit);
 
   ret = nimscripter_invoke(intr, "doOtherThing", &input, 1);
 
   char *myStr = "";
-  nimscripter_pnode_get_string(ret, &myStr);
+  nimscripter_pnodeGetString(ret, &myStr);
   printf("%s\n", myStr);
 
-  assert(nimscripter_pnode_get_kind(ret) == nkStrLit);
-  nimscripter_destroy_pnode(ret);
-  nimscripter_destroy_pnode(input);
+  assert(nimscripter_pnodeGetKind(ret) == nkStrLit);
+  nimscripter_destroyPnode(ret);
+  nimscripter_destroyPnode(input);
 
-  input = nimscripter_new_node(nkBracket);
+  input = nimscripter_newNode(nkBracket);
 
   for (int i = 0; i < 5; i++) {
-    nimscripter_pnode_add(input, nimscripter_int_node(i));
+    nimscripter_pnodeAdd(input, nimscripter_intNode(i));
   }
 
   ret = nimscripter_invoke(intr, "arrTest", &input, 1);
 
   intptr_t passed = 0;
-  assert(nimscripter_pnode_get_int(ret, &passed) && (bool)passed);
-  nimscripter_destroy_pnode(ret);
-  nimscripter_destroy_pnode(input);
+  assert(nimscripter_pnodeGetInt(ret, &passed) && (bool)passed);
+  nimscripter_destroyPnode(ret);
+  nimscripter_destroyPnode(input);
 
-  nimscripter_destroy_interpreter(intr);
+  nimscripter_destroyInterpreter(intr);
   return 0;
 }
