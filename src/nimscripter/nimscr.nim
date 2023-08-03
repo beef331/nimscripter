@@ -1,9 +1,9 @@
 ## This is a interopable version of the Nimscript module, there be dragons.
 ## If done properly this should allow interop from any language to Nimscript in an easy way.
 ## A lot of duplicated code that is done in a smarter safer way.
-import "$nim"/compiler / [nimeval, renderer, ast, llstream, lineinfos, options, vmdef]
+import "$nim"/compiler / [nimeval, renderer, ast, llstream, lineinfos, options, vmdef, vm]
 import std/[os, strformat, sugar, tables]
-export Severity, TNodeKind
+export Severity, TNodeKind, VmArgs
 
 
 
@@ -88,6 +88,7 @@ proc implementAddins(intr: Interpreter, scriptFile: File, scriptName: string, mo
     scriptFile.write addins.additions
 
   for uProc in addins.procs.toOpenArray(0, addins.procLen - 1):
+    scriptfile.writeLine(uProc.runtimeImpl)
     capture uProc:
       let anonProc = proc(args: VmArgs){.closure, gcsafe.} = 
         uProc.vmProc(args)
@@ -272,8 +273,13 @@ proc invoke*(intr: Interpreter, name: cstring, args: openArray[WrappedPNode]): W
       let arr = cast[ptr UncheckedArray[PNode]](args[0].addr)
       result = callRoutine(intr, prcSym, arr.toOpenArray(0, args.high))
 
-
 proc pnodeGetKind*(node: WrappedPNode): TNodeKind {.nimscrexport.} = PNode(node).kind
+
+proc vmargsGetInt*(args: VmArgs, i: Natural): BiggestInt {.nimscrexport.} = args.getInt(i)
+proc vmargsGetBool*(args: VmArgs, i: Natural): bool {.nimscrexport.} = args.getInt(i) != 0
+proc vmargsGetFloat*(args: VmArgs, i: Natural): BiggestFloat {.nimscrexport.} = args.getFloat(i)
+proc vmargsGetNode*(args: VmArgs, i: Natural): WrappedPNode {.nimscrexport.} = args.getNode(i)
+proc vmargsGetString*(args: VmArgs, i: Natural): cstring {.nimscrexport.} = cstring args.getString(i)
 
 when isLib:
   static: # Generate the kind enum

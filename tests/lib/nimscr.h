@@ -82,3 +82,10 @@ extern void nimscripter_destroyPnode(nimscripter_pnode_t);
 
 extern nimscripter_pnode_t nimscripter_invoke(nimscripter_interpreter_t, char *,
                                               nimscripter_pnode_t *, intptr_t);
+
+extern intptr_t nimscripter_vmargsGetInt(nimscripter_vm_args, intptr_t);
+extern bool nimscripter_vmargsGetBool(nimscripter_vm_args, intptr_t);
+extern double nimscripter_vmargsGetFloat(nimscripter_vm_args, intptr_t);
+extern nimscripter_pnode_t nimscripter_vmargsGetNode(nimscripter_vm_args,
+                                                     intptr_t);
+extern char *nimscripter_vmargsGetString(nimscripter_vm_args, intptr_t);
