@@ -1,15 +1,19 @@
 ## This is a interopable version of the Nimscript module, there be dragons.
 ## If done properly this should allow interop from any language to Nimscript in an easy way.
 ## A lot of duplicated code that is done in a smarter safer way.
-import "$nim"/compiler / [nimeval, renderer, ast, llstream, lineinfos, options, vmdef, vm]
-import std/[os, strformat, sugar, tables]
+const isLib = defined(nimscripterlib)
+
+import "$nim" / compiler / [nimeval, renderer, ast, lineinfos, vmdef]
+import std/[os, sugar]
 export Severity, TNodeKind, VmArgs
 
+when isLib:
+  import std / [strformat, tables]
+  import "$nim" / compiler / [llstream, vm, options]
 
 
 
-const
-  isLib = defined(nimscripterlib)
+
 
 when isLib:
   {.pragma: nimscrintrp, exportc"nimscripter_$1", dynlib, cdecl}
@@ -44,35 +48,37 @@ type
   ErrorHook* = proc(fileName: cstring, line, col: int, msg: cstring, severity: Severity) {.cdecl.}
   VmQuit = object of CatchableError
   WrappedPNode* = distinct PNode
+  WrappedInterpreter* = distinct Interpreter
 
-template whenlib*(lib, unlib: untyped) =
-  when isLib:
-    lib
-  else:
-    unlib
 
 proc define*(a, b: static cstring): Defines = Defines(left: a, right: b)
 
 const defaultDefines* = [define("nimscript", "true"), define("nimconfig", "true")]
+
 proc `=destroy`*(pnode: WrappedPNode)
 
-whenLib:
-  proc destroy_pnode(val: WrappedPNode) {.nimscrintrp.} =
-    GcUnref(PNode(val))
-do:
-  proc destroy*(val: WrappedPNode) {.nimscrintrp, importc: nstr"destroy_pnode".}
+when not isLib:
+  proc destroy*(val: sink WrappedPNode) {.nimscrintrp, importc: nstr"destroy_pnode".}
+  proc destroy*(intr: sink WrappedInterpreter) {.nimscrintrp, importc: nstr"destroy_interpreter".}
 
 
 proc `=destroy`*(pnode: WrappedPNode) =
-  whenLib:
-    destroy_pnode(pnode)
-  do:
+  when isLib:
+    `=destroy`(PNode pnode)
+  else:
     destroy(pnode)
 
+proc `=destroy`*(intr: WrappedInterpreter) =
+  when isLib:
+    `=destroy`(Interpreter intr)
+  else:
+    destroy(intr)
 
 converter toPNode*(wrapped: WrappedPNode): PNode = PNode(wrapped)
 converter toPNode*(pnode: PNode): WrappedPNode = WrappedPNode(pnode)
 
+converter toIntrp*(intr: WrappedInterpreter): Interpreter = Interpreter(intr)
+converter toIntrp*(intr: Interpreter): WrappedInterpreter = WrappedInterpreter(intr)
 
 proc getSearchPath(path: string): seq[string] =
   result.add path
@@ -87,9 +93,9 @@ proc convertSearchPaths(paths: openArray[cstring]): seq[string] =
   for path in paths:
     result.add $path 
 
-whenlib:
+when isLib:
   var errorHook {.exportc: "nimscripter_$1", dynlib.}: ErrorHook
-do:
+else:
   var errorHook* {.importc:"nimscripter_$1", dynlib: nimscrlib.}: ErrorHook
 
 proc implementAddins(intr: Interpreter, scriptFile: File, scriptName: string, modules: openarray[cstring], addins: VmAddins) =
@@ -107,7 +113,7 @@ proc implementAddins(intr: Interpreter, scriptFile: File, scriptName: string, mo
       let anonProc = proc(args: VmArgs){.closure, gcsafe.} = 
         uProc.vmProc(args)
       intr.implementRoutine(scriptName, scriptName, $uProc.name, anonProc)
-whenlib:
+when isLib:
   proc load_script(
     script: cstring;
     addins: VMAddins;
@@ -115,7 +121,7 @@ whenlib:
     searchPaths: openArray[cstring];
     stdPath: cstring; 
     defines: openArray[Defines]
-  ): Interpreter {.nimscrintrp.} =
+  ): WrappedInterpreter {.nimscrintrp.} =
 
     var searchPaths = getSearchPath($stdPath) & searchPaths.convertSearchPaths()
     let
@@ -173,7 +179,7 @@ whenlib:
     searchPaths: openArray[cstring];
     stdPath: cstring; 
     defines: openArray[Defines]
-  ): Interpreter {.nimscrintrp.} =
+  ): WrappedInterpreter {.nimscrintrp.} =
     var searchPaths = getSearchPath($stdPath) & @searchPaths.convertSearchPaths()
     let
       script = "script"
@@ -221,11 +227,6 @@ whenlib:
       result = intr
     except VMQuit:
       discard
-
-  proc destroy_interpreter*(intr: Interpreter) {.nimscrintrp.} =
-    GC_unref(intr)
-    nimeval.destroyInterpreter(intr)
-
 
   proc new_node*(kind: TNodeKind): WrappedPNode {.nimscrintrp.} = ast.newNode(kind)
 
@@ -279,7 +280,7 @@ whenlib:
       result = true
       dest = cstring PNode(val).strVal
 
-  proc invoke*(intr: Interpreter, name: cstring, args: openArray[WrappedPNode]): WrappedPNode {.nimscrintrp.} =
+  proc invoke*(intr: WrappedInterpreter, name: cstring, args: openArray[WrappedPNode]): WrappedPNode {.nimscrintrp.} =
     let prcSym = intr.selectRoutine($name)
     if prcSym != nil:
       if args.len == 0:
@@ -304,7 +305,15 @@ whenlib:
         str.add ","
     str.add "};"
     writeFile("tests/lib/nimscr_kinds.h", str)
-do:
+
+  proc deinit*() {.nimscrintrp.} = GCfullCollect() # Collect all?
+
+
+  proc destroy_interpreter*(intr: sink WrappedInterpreter) {.nimscrintrp.} = discard
+  proc destroy_pnode*(pnode: sink WrappedPNode) {.nimscrintrp.} = discard
+
+
+else:
   proc loadScript*(
     script: cstring;
     addins: VMAddins;
@@ -312,7 +321,7 @@ do:
     searchPaths: openArray[cstring];
     stdPath: cstring; 
     defines: openArray[Defines]
-  ): Interpreter {.nimscrintrp, importc: nstr"load_script".}
+  ): WrappedInterpreter {.nimscrintrp, importc: nstr"load_script".}
 
   proc loadString*(
     script: cstring;
@@ -321,9 +330,7 @@ do:
     searchPaths: openArray[cstring];
     stdPath: cstring; 
     defines: openArray[Defines]
-  ): Interpreter {.nimscrintrp, importc: nstr"load_string".}
-
-  proc destroyInterpreter*(intr: Interpreter) {.nimscrintrp, importc: nstr"destroy_interpreter".}
+  ): WrappedInterpreter {.nimscrintrp, importc: nstr"load_string".}
 
   proc newNode*(kind: TNodeKind): WrappedPNode {.nimscrintrp, importc: nstr"new_node".}
 
@@ -357,7 +364,7 @@ do:
 
   proc getString*(val: WrappedPNode, dest: var cstring): bool {.nimscrintrp, importc: nstr"pnode_get_string".}
 
-  proc invoke*(intr: Interpreter, name: cstring, args: openArray[WrappedPNode]): WrappedPNode {.nimscrintrp, importc: nstr"invoke".}
+  proc invoke*(intr: WrappedInterpreter, name: cstring, args: openArray[WrappedPNode]): WrappedPNode {.nimscrintrp, importc: nstr"invoke".}
 
   proc kind*(node: WrappedPNode): TNodeKind {.nimscrintrp, importc: nstr"pnode_get_kind".}
 
@@ -367,7 +374,5 @@ do:
   proc getNode*(args: VmArgs, i: Natural): WrappedPNode {.nimscrintrp, importc: nstr"vmargs_get_node".}
   proc getString*(args: VmArgs, i: Natural): cstring {.nimscrintrp, importc: nstr"vmargs_get_string".} 
 
-
-
-
+  proc deinit*() {.nimscrintrp, importc: nstr"deinit".}
 

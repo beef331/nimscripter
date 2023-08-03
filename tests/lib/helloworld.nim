@@ -57,3 +57,5 @@ for i in 0..<5:
 ret = intr.invoke("arrTest", [input])
 
 assert ret.getInt(myVal) and bool(myVal)
+`=destroy`(intr)
+deinit()
