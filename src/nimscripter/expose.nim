@@ -280,7 +280,7 @@ proc generateModuleImpl(n: NimNode, genSym = false): NimNode =
         # is not a generic proc dont need anything special
         result = makeVMProcSignature(n, genSym)
       else:
-        result = generateTypeclassProcSignatures(n):
+        result = generateTypeclassProcSignatures(n)
     of nnkSym:
       if n.symKind in {nskProc, nskFunc}:
         result = generateModuleImpl(n.getImpl, genSym)
