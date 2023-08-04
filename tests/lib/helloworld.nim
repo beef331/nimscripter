@@ -25,12 +25,12 @@ proc arrTest*(arr: openArray[int]): bool =
 doThing(200)
 """
 
-let modules = cstring"json"
+let modules = [cstring"json"]
 
 let intr = loadString(
   myScript,
   addins,
-  cast[ptr UncheckedArray[cstring]](modules.addr).toOpenArray(0, 0),
+  modules,
   [],
   "/home/jason/.choosenim/toolchains/nim-#devel/lib",
   defaultDefines
