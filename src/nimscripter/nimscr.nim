@@ -52,6 +52,15 @@ type
   WrappedPNode* = distinct PNode
   WrappedInterpreter* = distinct Interpreter
 
+when isLib:
+  type SaveState* = ref object
+    state: seq[WrappedPNode]
+else:
+  type
+    SaveStateImpl = ref object
+    SaveState* = distinct SaveStateImpl 
+
+
 
 proc define*(a, b: static cstring): Defines = Defines(left: a, right: b)
 
@@ -62,6 +71,7 @@ proc `=destroy`*(pnode: WrappedPNode)
 when not isLib:
   proc destroy*(val: sink WrappedPNode) {.nimscrintrp, importc: nstr"destroy_pnode".}
   proc destroy*(intr: sink WrappedInterpreter) {.nimscrintrp, importc: nstr"destroy_interpreter".}
+  proc destroy*(intr: sink SaveState) {.nimscrintrp, importc: nstr"destroy_save_state".}
 
 
 proc `=destroy`*(pnode: WrappedPNode) =
@@ -74,6 +84,10 @@ proc `=destroy`*(intr: WrappedInterpreter) =
   when isLib:
     `=destroy`(Interpreter intr)
   else:
+    destroy(intr)
+
+when not isLib:
+  proc `=destroy`*(intr: SaveState) =
     destroy(intr)
 
 converter toPNode*(wrapped: WrappedPNode): PNode = PNode(wrapped)
@@ -132,8 +146,7 @@ when isLib:
 
     let
       script = $script
-      scriptName = script.splitFile.name
-      scriptDir = getTempDir() / scriptName
+      (scriptDir, scriptName, _) = script.splitFile()
       scriptNimble = scriptDir / scriptName.changeFileExt(".nimble")
       scriptPath = scriptDir / scriptName.changeFileExt(".nim")
 
@@ -320,6 +333,23 @@ when isLib:
 
   proc destroy_interpreter*(intr: sink WrappedInterpreter) {.nimscrintrp.} = discard
   proc destroy_pnode*(pnode: sink WrappedPNode) {.nimscrintrp.} = discard
+  proc destroy_save_state*(pnode: sink WrappedPNode) {.nimscrintrp.} = discard
+
+  proc save_state*(intr: Interpreter): SaveState {.nimscrintrp.} =
+    new result
+    for sym in intr.exportedSymbols():
+      if sym.kind == skVar:
+        let node = newNode(nkPar)
+        node.add newStrNode(nkStrLit, sym.name.s)
+        node.add intr.getGlobalValue(sym) 
+        echo "SavedState of: ", sym.name.s
+        result.state.add node
+
+  proc load_state*(intr: Interpreter, state: SaveState) {.nimscrintrp.} =
+    for x in state.state:
+      let sym = intr.selectUniqueSymbol(x[0].strVal, {skVar})
+      if sym != nil:
+        intr.setGlobalValue(sym, x[1])
 
 
 else:
@@ -383,6 +413,8 @@ else:
   proc getFloat*(args: VmArgs, i: Natural): BiggestFloat {.nimscrintrp, importc: nstr"vmargs_get_float".}
   proc getNode*(args: VmArgs, i: Natural): WrappedPNode {.nimscrintrp, importc: nstr"vmargs_get_node".}
   proc getString*(args: VmArgs, i: Natural): cstring {.nimscrintrp, importc: nstr"vmargs_get_string".} 
+  proc saveState*(intr: Interpreter): SaveState {.nimscrintrp, importc: nstr"save_state".}
+  proc loadState*(intr: Interpreter, saveState: SaveState) {.nimscrintrp, importc: nstr"load_state".}
 
   proc deinit*() {.nimscrintrp, importc: nstr"deinit".}
 
