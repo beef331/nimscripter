@@ -255,7 +255,10 @@ when isLib:
   proc float_node*(val: float32): WrappedPNode {.nimscrintrp.} = newFloatNode(nkFloat32Lit, val.BiggestFloat)
   proc double_node*(val: float): WrappedPNode {.nimscrintrp.} = newFloatNode(nkFloat64Lit, val.BiggestFloat)
 
-  proc string_node*(val: cstring): WrappedPNode {.nimscrintrp.} = newStrNode(nkStrLit, $val)
+  proc string_node*(val: cstring): WrappedPNode {.nimscrintrp.} = newStrNode(nkStrLit, $val) 
+  # Should we expose a `string` API across the C bridge?
+  # We then could take in `string` everywhere and not have to copy as much in lib.
+  # Though it still copies...
 
 
   proc pnode_index*(val: WrappedPNode, ind: int): WrappedPNode {.nimscrintrp.} =
