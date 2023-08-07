@@ -43,10 +43,6 @@ proc toVm*[T: distinct](a: T): PNode = toVm(distinctBase(T, true)(a))
 template raiseParseError(t: typedesc): untyped =
   raise newException(VMParseError, "Cannot convert to: " & $t)
 
-proc extractType(typ: NimNode): NimNode =
-  let impl = typ.getTypeInst
-  impl[^1]
-
 const intLits = {nkCharLit..nkUInt64Lit}
 proc fromVm*(t: typedesc[SomeOrdinal or char], node: PNode): t =
   if node.kind in intLits:
@@ -113,17 +109,6 @@ proc fromVm*[T: tuple](obj: typedesc[T], vmNode: Pnode): T =
       inc index
   else:
     raiseParseError(T)
-
-proc hasRecCase(n: NimNode): bool =
-  for son in n:
-    if son.kind == nnkRecCase:
-      return true
-
-proc baseSym(n: NimNode): NimNode =
-  if n.kind == nnkSym:
-    n
-  else:
-    n.basename
 
 proc replaceGenerics(n: NimNode, genTyp: seq[(NimNode, NimNode)]) =
   ## Replaces all instances of a typeclass with a generic type,

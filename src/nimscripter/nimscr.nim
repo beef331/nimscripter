@@ -12,6 +12,8 @@ when isLib:
   import "$nim" / compiler / [llstream, vm, options]
 else:
   import vmconversion
+  import std/typetraits
+  import assume/typeit
 
 
 
@@ -340,23 +342,24 @@ else:
 
   proc add*(node, toAdd: WrappedPNode) {.nimscrintrp, importc: nstr"pnode_add".}
 
-  proc intNode*(val: int): WrappedPNode {.nimscrintrp, importc: nstr"int_node".}
-  proc int8Node*(val: int8): WrappedPNode {.nimscrintrp, importc: nstr"int8_node".}
-  proc int16Node*(val: int16): WrappedPNode {.nimscrintrp, importc: nstr"int16_node".}
-  proc int32Node*(val: int32): WrappedPNode {.nimscrintrp, importc: nstr"int32_node".}
-  proc int64Node*(val: int64): WrappedPNode {.nimscrintrp, importc: nstr"int64_node".}
+  proc newNode*(val: int): WrappedPNode {.nimscrintrp, importc: nstr"int_node".}
+  proc newNode*(val: int8): WrappedPNode {.nimscrintrp, importc: nstr"int8_node".}
+  proc newNode*(val: int16): WrappedPNode {.nimscrintrp, importc: nstr"int16_node".}
+  proc newNode*(val: int32): WrappedPNode {.nimscrintrp, importc: nstr"int32_node".}
+  proc newNode*(val: int64): WrappedPNode {.nimscrintrp, importc: nstr"int64_node".}
 
-  proc uintNode*(val: uint): WrappedPNode {.nimscrintrp, importc: nstr"uint_node".}
-  proc uint8Node*(val: uint8): WrappedPNode {.nimscrintrp, importc: nstr"uint8_node"}
-  proc uint16Node*(val: uint16): WrappedPNode {.nimscrintrp, importc: nstr"uint16_node".}
-  proc uint32Node*(val: uint32): WrappedPNode {.nimscrintrp, importc: nstr"uint32_node".}
-  proc uint64Node*(val: uint64): WrappedPNode {.nimscrintrp, importc: nstr"uint64_node".}
+  proc newNode*(val: uint): WrappedPNode {.nimscrintrp, importc: nstr"uint_node".}
+  proc newNode*(val: uint8): WrappedPNode {.nimscrintrp, importc: nstr"uint8_node"}
+  proc newNode*(val: uint16): WrappedPNode {.nimscrintrp, importc: nstr"uint16_node".}
+  proc newNode*(val: uint32): WrappedPNode {.nimscrintrp, importc: nstr"uint32_node".}
+  proc newNode*(val: uint64): WrappedPNode {.nimscrintrp, importc: nstr"uint64_node".}
 
-  proc floatNode*(val: float32): WrappedPNode {.nimscrintrp, importc: nstr"float_node".}
-  proc doubleNode*(val: float): WrappedPNode {.nimscrintrp, importc: nstr"double_node".}
+  proc newNode*(val: float32): WrappedPNode {.nimscrintrp, importc: nstr"float_node".}
+  proc newNode*(val: float): WrappedPNode {.nimscrintrp, importc: nstr"double_node".}
 
-  proc stringNode*(val: cstring): WrappedPNode {.nimscrintrp, importc: nstr"string_node".}
+  proc newNode*(val: cstring): WrappedPNode {.nimscrintrp, importc: nstr"string_node".}
 
+  proc newNode*(val: enum or bool): WrappedPNode = BiggestInt(val).newNode()
 
   proc `[]`*(val: WrappedPNode, ind: int): WrappedPNode {.nimscrintrp, importc: nstr"pnode_index".}
   
@@ -383,3 +386,47 @@ else:
   proc fromVm*(t: typedesc, node: WrappedPNode): t =
     fromVm(t, Pnode(node))
 
+  proc newNode*[T: string](a: T): WrappedPNode = newNode(cstring a)
+  proc newNode*[T: proc](a: T): WrappedPNode = nimscr.newNode(nkNilLit)
+
+  proc newNode*[T](s: set[T]): WrappedPNode =
+    result = nimscr.newNode(nkCurly)
+    let count = high(T).ord - low(T).ord
+    result.sons.setLen(count)
+    for val in s:
+      let offset = val.ord - low(T).ord
+      result[offset] = newNode(val)
+
+  proc newNode*[T: openArray](obj: T): WrappedPNode
+  proc newNode*[T: tuple](obj: T): WrappedPNode
+  proc newNode*[T: object](obj: T): WrappedPNode
+  proc newNode*[T: ref](obj: T): WrappedPNode
+  proc newNode*[T: distinct](a: T): WrappedPNode = newNode(distinctBase(T, true)(a))
+  proc newNode*[T: openArray](obj: T): WrappedPNode =
+    result = nimscr.newNode(nkBracketExpr)
+    for x in obj:
+      result.add nimscr.newNode(x)
+
+  proc newNode*[T: tuple](obj: T): WrappedPNode =
+    result = nimscr.newNode(nkTupleConstr)
+    for x in obj.fields:
+      result.add newNode(x)
+
+  proc newNode*[T: object](obj: T): WrappedPNode =
+    result = nimscr.newNode(nkObjConstr)
+    result.add nimscr.newNode(nkEmpty)
+    typeit(obj, {titAllFields}):
+      result.add nimscr.newNode(nkEmpty)
+    var i = 1
+    typeIt(obj, {titAllFields, titDeclaredOrder}):
+      if it.isAccessible:
+        result[i] = nimscr.newNode(nkExprColonExpr)
+        result[i].add nimscr.newNode(nkEmpty)
+        result[i].add newNode(it)
+      inc i
+
+  proc newNode*[T: ref](obj: T): WrappedPNode =
+    if obj.isNil:
+      nimscr.newNode(nkNilLit)
+    else:
+      nimscr.newNode(obj[])

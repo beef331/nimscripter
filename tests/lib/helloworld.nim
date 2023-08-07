@@ -24,6 +24,7 @@ proc arrTest*(arr: openArray[int]): bool =
   arr == [0, 1, 2, 3, 4]
 
 proc tupleTest*(a: int, b: string): (int, string) = (a, b)
+proc inputTest*(a: (string, float, int, bool)) = echo a
 doThing(200)
 """
 
@@ -47,7 +48,7 @@ assert ret.getInt myVal
 echo myVal
 
 
-ret = intr.invoke("doOtherThing", [intNode(500)])
+ret = intr.invoke("doOtherThing", [newNode(500)])
 assert ret.kind == nkStrLit
 var str: cstring
 assert ret.getString(str)
@@ -55,12 +56,13 @@ echo str
 
 let input = newNode(nkBracket)
 for i in 0..<5:
-  input.add(intNode(i))
+  input.add newNode(i)
 ret = intr.invoke("arrTest", [input])
 
 assert ret.getInt(myVal) and bool(myVal)
 
-ret = intr.invoke("tupleTest", [intNode(100), stringNode("hello")])
+ret = intr.invoke("tupleTest", [newNode(100), newNode("hello")])
 assert (int, string).fromVm(ret) == (100, "hello")
-ret = intr.invoke("tupleTest", [intNode(3100), stringNode("world")])
+ret = intr.invoke("tupleTest", [newNode(3100), newNode("world")])
 assert (int, string).fromVm(ret) == (3100, "world")
+discard intr.invoke("inputTest", [newNode ("hello", 32f, 100, true)])
