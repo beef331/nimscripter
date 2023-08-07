@@ -10,8 +10,8 @@ export Severity, TNodeKind, VmArgs
 when isLib:
   import std / [strformat, tables]
   import "$nim" / compiler / [llstream, vm, options]
-
-
+else:
+  import vmconversion
 
 
 
@@ -32,7 +32,7 @@ proc nstr(s: string): string {.used.} = "nimscripter_" & s
 
 type
   VmProcSignature* {.bycopy.} = object
-    name*: cstring
+    name*, module*: cstring
     runtimeImpl*: cstring
     vmProc*: proc(node: VmArgs) {.cdecl, gcsafe.}
 
@@ -112,7 +112,12 @@ proc implementAddins(intr: Interpreter, scriptFile: File, scriptName: string, mo
     capture uProc:
       let anonProc = proc(args: VmArgs){.closure, gcsafe.} = 
         uProc.vmProc(args)
-      intr.implementRoutine(scriptName, scriptName, $uProc.name, anonProc)
+      let module = $uProc.module
+      if module.len == 0:
+        intr.implementRoutine(scriptName, scriptName, $uProc.name, anonProc)
+      else:
+        intr.implementRoutine(scriptName, module, $uProc.name, anonProc)
+
 when isLib:
   proc load_script(
     script: cstring;
@@ -123,7 +128,6 @@ when isLib:
     defines: openArray[Defines]
   ): WrappedInterpreter {.nimscrintrp.} =
 
-    var searchPaths = getSearchPath($stdPath) & searchPaths.convertSearchPaths()
     let
       script = $script
       scriptName = script.splitFile.name
@@ -136,8 +140,8 @@ when isLib:
 
     let scriptFile = open(scriptPath, fmReadWrite)
 
+    var searchPaths = getSearchPath($stdPath) & searchPaths.convertSearchPaths()
     searchPaths.add scriptDir
-
 
     let
       intr = createInterpreter(scriptPath, searchPaths, flags = {allowInfiniteLoops},
@@ -375,4 +379,7 @@ else:
   proc getString*(args: VmArgs, i: Natural): cstring {.nimscrintrp, importc: nstr"vmargs_get_string".} 
 
   proc deinit*() {.nimscrintrp, importc: nstr"deinit".}
+
+  proc fromVm*(t: typedesc, node: WrappedPNode): t =
+    fromVm(t, Pnode(node))
 

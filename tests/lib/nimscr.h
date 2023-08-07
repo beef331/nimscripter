@@ -6,7 +6,7 @@ typedef struct pnode *nimscripter_pnode_t;
 typedef struct vm_args *nimscripter_vm_args;
 
 typedef struct nimscripter_vm_proc_signature {
-  char *name;
+  char *name, *module;
   char *runtime_impl;
   void (*vm_proc)(nimscripter_vm_args);
 

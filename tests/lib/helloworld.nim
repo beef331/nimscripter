@@ -22,6 +22,8 @@ proc doOtherThing*(a: int): string = $a
 proc arrTest*(arr: openArray[int]): bool =
   echo arr
   arr == [0, 1, 2, 3, 4]
+
+proc tupleTest*(a: int, b: string): (int, string) = (a, b)
 doThing(200)
 """
 
@@ -57,5 +59,8 @@ for i in 0..<5:
 ret = intr.invoke("arrTest", [input])
 
 assert ret.getInt(myVal) and bool(myVal)
-`=destroy`(intr)
-deinit()
+
+ret = intr.invoke("tupleTest", [intNode(100), stringNode("hello")])
+assert (int, string).fromVm(ret) == (100, "hello")
+ret = intr.invoke("tupleTest", [intNode(3100), stringNode("world")])
+assert (int, string).fromVm(ret) == (3100, "world")

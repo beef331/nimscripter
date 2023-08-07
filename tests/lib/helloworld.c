@@ -14,7 +14,7 @@ void testImpl(nimscripter_vm_args args) {
 
 int main() {
   nimscripter_vm_proc_signature_t testProc = {
-      "testInput", "proc testInput(i: int) = discard", testImpl};
+      "testInput", "", "proc testInput(i: int) = discard", testImpl};
   nimscripter_addins_t addins = {&testProc, 1};
   nimscripter_errorHook = my_error_hook;
   char *modules = "json";
