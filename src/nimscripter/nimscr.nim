@@ -9,7 +9,7 @@ export Severity, TNodeKind, VmArgs
 
 when isLib:
   import std / [strformat, tables]
-  import "$nim" / compiler / [llstream, vm, options]
+  import "$nim" / compiler / [llstream, vm, options, types]
 else:
   import vmconversion
   import std/typetraits
@@ -53,8 +53,12 @@ type
   WrappedInterpreter* = distinct Interpreter
 
 when isLib:
-  type SaveState* = ref object
-    state: seq[WrappedPNode]
+  type 
+    SaveEntry = object
+      val: PNode
+      typ: PType
+      name: string
+    SaveState* = ref seq[SaveEntry]
 else:
   type
     SaveStateImpl = ref object
@@ -319,6 +323,11 @@ when isLib:
   proc vmargs_get_node*(args: VmArgs, i: Natural): WrappedPNode {.nimscrintrp.} = args.getNode(i)
   proc vmargs_get_string*(args: VmArgs, i: Natural): cstring {.nimscrintrp.} = cstring vm.getString(args, i)
 
+  proc vmargs_set_result_int*(args: VmArgs, val: BiggestInt) {.nimscrintrp.} = args.setResult(val)
+  proc vmargs_set_result_float*(args: VmArgs, val: BiggestFloat) {.nimscrintrp.} = args.setResult(val)
+  proc vmargs_set_result_string*(args: VmArgs, val: cstring) {.nimscrintrp.} = args.setResult($val)
+  proc vmargs_set_result_node*(args: VmArgs, val: sink WrappedPNode) {.nimscrintrp.} = args.setResult(val)
+
   static: # Generate the kind enum
     var str = "enum nimscripter_pnode_kind {"
     for kind in TNodeKind:
@@ -339,17 +348,13 @@ when isLib:
     new result
     for sym in intr.exportedSymbols():
       if sym.kind == skVar:
-        let node = newNode(nkPar)
-        node.add newStrNode(nkStrLit, sym.name.s)
-        node.add intr.getGlobalValue(sym) 
-        echo "SavedState of: ", sym.name.s
-        result.state.add node
+        result[].add SaveEntry(val: intr.getGlobalValue(sym), typ: sym.typ, name: sym.name.s)
 
   proc load_state*(intr: Interpreter, state: SaveState) {.nimscrintrp.} =
-    for x in state.state:
-      let sym = intr.selectUniqueSymbol(x[0].strVal, {skVar})
-      if sym != nil:
-        intr.setGlobalValue(sym, x[1])
+    for x in state[]:
+      let sym = intr.selectUniqueSymbol(x.name, {skVar})
+      if sym != nil and sym.typ.sameType(x.typ):
+        intr.setGlobalValue(sym, x.val)
 
 
 else:
@@ -412,7 +417,15 @@ else:
   proc getBool*(args: VmArgs, i: Natural): bool {.nimscrintrp, importc: nstr"vmargs_get_bool".}
   proc getFloat*(args: VmArgs, i: Natural): BiggestFloat {.nimscrintrp, importc: nstr"vmargs_get_float".}
   proc getNode*(args: VmArgs, i: Natural): WrappedPNode {.nimscrintrp, importc: nstr"vmargs_get_node".}
-  proc getString*(args: VmArgs, i: Natural): cstring {.nimscrintrp, importc: nstr"vmargs_get_string".} 
+  proc getString*(args: VmArgs, i: Natural): cstring {.nimscrintrp, importc: nstr"vmargs_get_string".}
+
+  proc setResult*(args: VmArgs, val: BiggestInt) {.nimscrintrp, importc: nstr"vmargs_set_result_int".}
+  proc setResult*(args: VmArgs, val: SomeOrdinal or enum or bool) = args.setResult(BiggestInt(val))
+  proc setResult*(args: VmArgs, val: BiggestFloat) {.nimscrintrp, importc: nstr"vmargs_set_result_float".}
+  proc setResult*(args: VmArgs, val: cstring) {.nimscrintrp, importc: "vmargs_set_result_string".}
+  proc setResult*(args: VmArgs, val: string) {.nimscrintrp.} = args.setResult(cstring val)
+  proc setResult*(args: VmArgs, val: sink WrappedPNode) {.nimscrintrp, importc: "vmargs_set_result_node".}
+
   proc saveState*(intr: Interpreter): SaveState {.nimscrintrp, importc: nstr"save_state".}
   proc loadState*(intr: Interpreter, saveState: SaveState) {.nimscrintrp, importc: nstr"load_state".}
 
