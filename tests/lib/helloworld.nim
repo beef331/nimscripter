@@ -1,6 +1,8 @@
 import ../../src/nimscripter/nimscr
-
 import std/strformat
+
+nimscr.init()
+echo nimscr.version
 
 errorHook = proc(name: cstring, line, col: int, msg: cstring, sev: Severity) {.cdecl.} =
   echo fmt"{line}:{col}; {msg}"

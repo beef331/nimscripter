@@ -4,11 +4,11 @@
 const isLib = defined(nimscripterlib)
 
 import "$nim" / compiler / [nimeval, renderer, ast, lineinfos, vmdef]
-import std/[os, sugar]
+import std/[os, sugar, strutils]
 export Severity, TNodeKind, VmArgs
 
 when isLib:
-  import std / [strformat, tables]
+  import std / [strformat, tables, strscans]
   import "$nim" / compiler / [llstream, vm, options, types]
 else:
   import vmconversion
@@ -49,7 +49,8 @@ type
   WrappedPNode* = distinct PNode
 
   WrappedInterpreter* = distinct Interpreter
-
+  Version* = object
+    major*, minor*, patch*: uint8
 
 when isLib:
   type 
@@ -94,9 +95,7 @@ when not isLib:
 
 proc isNil*(intr: WrappedInterpreter): bool = Interpreter(intr).isNil
 proc `==`*(intr: WrappedInterpreter, _: typeof(nil)): bool = intr.isNil
-proc `==`*(_: typeof(nil), intr: WrappedInterpreter): bool = intr.isNil()
-
-
+proc `==`*(_: typeof(nil), intr: WrappedInterpreter): bool = intr.isNil
 
 converter toPNode*(wrapped: WrappedPNode): PNode = PNode(wrapped)
 converter toPNode*(pnode: PNode): WrappedPNode = WrappedPNode(pnode)
@@ -116,8 +115,16 @@ proc convertSearchPaths(paths: openArray[cstring]): seq[string] =
 
 when isLib:
   var errorHook {.exportc: "nimscripter_$1", dynlib.}: ErrorHook
+  var version* {.exportc: "nimscripter_$1", dynlib.} = static:
+    let 
+      val = staticExec"git describe --tags"
+      (_, major, minor, patch) = val.scanTuple("v$i.$i.$i")
+    Version(major: uint8 major, minor: uint8 minor, patch: uint8 patch)
+
 else:
   var errorHook* {.importc:"nimscripter_$1", dynlib: nimscrlib.}: ErrorHook
+  var internalVersion {.exportc: "nimscripter_version", dynlib: nimscrlib, noinit.}: Version
+  let version* = internalVersion
 
 proc implementAddins(intr: Interpreter, scriptName: string, modules: openarray[cstring], addins: VmAddins) =
   for uProc in addins.procs.toOpenArray(0, addins.procLen - 1):
@@ -298,6 +305,8 @@ when isLib:
     str.add "};"
     writeFile("tests/lib/nimscr_kinds.h", str)
 else:
+  proc init*() {.nimscrintrp, importc: nstr"NimMain".}
+
   proc loadScript*(
     script: cstring;
     addins: VMAddins;
