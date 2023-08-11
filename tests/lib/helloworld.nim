@@ -8,9 +8,12 @@ errorHook = proc(name: cstring, line, col: int, msg: cstring, sev: Severity) {.c
 proc doThing(args: VmArgs) {.cdecl.} = 
   echo args.getInt(0)
 
-let prc = VmProcSignature(name: "doThing", runtimeImpl: "proc doThing(i: int) = discard", vmProc: doThing)
+let prc = VmProcSignature(package: "script", module: "script", name: "doSpecificThing", vmProc: doThing)
 var addins = VmAddins(procs: cast[ptr UncheckedArray[typeof(prc)]](addr prc), procLen: 1)
-const myScript = cstring"""
+const myScript = """
+import std/json
+proc doSpecificThing(i: int) = discard
+
 echo %*{"a": "Hello World"}
 
 proc doThing*(): int =
@@ -25,20 +28,16 @@ proc arrTest*(arr: openArray[int]): bool =
 
 proc tupleTest*(a: int, b: string): (int, string) = (a, b)
 proc inputTest*(a: (string, float, int, bool)) = echo a
-doThing(200)
+doSpecificThing(200)
 """
+writeFile("/tmp/script.nim", myScript)
 
-let modules = [cstring"json"]
-
-let intr = loadString(
-  myScript,
+let intr = loadScript(
+  "/tmp/script.nim",
   addins,
-  modules,
   [],
-  "/home/jason/.choosenim/toolchains/nim-#devel/lib",
-  defaultDefines
-  )
-
+  "/home/jason/.choosenim/toolchains/nim-#devel/lib"
+)
 var 
   ret = intr.invoke("doThing", [])
   myVal: BiggestInt

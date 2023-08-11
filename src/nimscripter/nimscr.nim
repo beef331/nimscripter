@@ -15,8 +15,6 @@ else:
   import std/typetraits
   import assume/typeit
 
-
-
 when isLib:
   {.pragma: nimscrintrp, exportc"nimscripter_$1", dynlib, cdecl}
 else:
@@ -34,8 +32,7 @@ proc nstr(s: string): string {.used.} = "nimscripter_" & s
 
 type
   VmProcSignature* {.bycopy.} = object
-    name*, module*: cstring
-    runtimeImpl*: cstring
+    package*, name*, module*: cstring
     vmProc*: proc(node: VmArgs) {.cdecl, gcsafe.}
 
   VmAddins* {.bycopy.} = object
@@ -50,7 +47,9 @@ type
   ErrorHook* = proc(fileName: cstring, line, col: int, msg: cstring, severity: Severity) {.cdecl.}
   VmQuit = object of CatchableError
   WrappedPNode* = distinct PNode
+
   WrappedInterpreter* = distinct Interpreter
+
 
 when isLib:
   type 
@@ -63,8 +62,6 @@ else:
   type
     SaveStateImpl = ref object
     SaveState* = distinct SaveStateImpl 
-
-
 
 proc define*(a, b: static cstring): Defines = Defines(left: a, right: b)
 
@@ -86,7 +83,8 @@ proc `=destroy`*(pnode: WrappedPNode) =
 
 proc `=destroy`*(intr: WrappedInterpreter) =
   when isLib:
-    `=destroy`(Interpreter intr)
+    if Interpreter(intr) != nil:
+      `=destroy`(Interpreter(intr))
   else:
     destroy(intr)
 
@@ -94,11 +92,14 @@ when not isLib:
   proc `=destroy`*(intr: SaveState) =
     destroy(intr)
 
+proc isNil*(intr: WrappedInterpreter): bool = Interpreter(intr).isNil
+proc `==`*(intr: WrappedInterpreter, _: typeof(nil)): bool = intr.isNil
+proc `==`*(_: typeof(nil), intr: WrappedInterpreter): bool = intr.isNil()
+
+
+
 converter toPNode*(wrapped: WrappedPNode): PNode = PNode(wrapped)
 converter toPNode*(pnode: PNode): WrappedPNode = WrappedPNode(pnode)
-
-converter toIntrp*(intr: WrappedInterpreter): Interpreter = Interpreter(intr)
-converter toIntrp*(intr: Interpreter): WrappedInterpreter = WrappedInterpreter(intr)
 
 proc getSearchPath(path: string): seq[string] =
   result.add path
@@ -118,62 +119,53 @@ when isLib:
 else:
   var errorHook* {.importc:"nimscripter_$1", dynlib: nimscrlib.}: ErrorHook
 
-proc implementAddins(intr: Interpreter, scriptFile: File, scriptName: string, modules: openarray[cstring], addins: VmAddins) =
- 
-  for modu in modules:
-    scriptFile.write "import "
-    scriptFile.writeLine modu
-  
-  if addins.additions != nil:
-    scriptFile.write addins.additions
-
+proc implementAddins(intr: Interpreter, scriptName: string, modules: openarray[cstring], addins: VmAddins) =
   for uProc in addins.procs.toOpenArray(0, addins.procLen - 1):
-    scriptfile.writeLine(uProc.runtimeImpl)
     capture uProc:
       let anonProc = proc(args: VmArgs){.closure, gcsafe.} = 
         uProc.vmProc(args)
-      let module = $uProc.module
-      if module.len == 0:
-        intr.implementRoutine(scriptName, scriptName, $uProc.name, anonProc)
-      else:
-        intr.implementRoutine(scriptName, module, $uProc.name, anonProc)
+      intr.implementRoutine($uProc.package, $uProc.module, $uProc.name, anonProc)
 
 when isLib:
   proc load_script(
     script: cstring;
     addins: VMAddins;
-    modules: openArray[cstring];
     searchPaths: openArray[cstring];
     stdPath: cstring; 
     defines: openArray[Defines]
-  ): WrappedInterpreter {.nimscrintrp.} =
+  ): WrappedInterpreter {.nimscrintrp, raises: [].} =
 
     let
-      script = $script
-      (scriptDir, scriptName, _) = script.splitFile()
+      scriptPath = $script
+      (scriptDir, scriptName, _) = scriptPath.splitFile()
       scriptNimble = scriptDir / scriptName.changeFileExt(".nimble")
-      scriptPath = scriptDir / scriptName.changeFileExt(".nim")
+    try:
+      writeFile(scriptNimble, "")
+    except IoError, OsError:
+      return 
 
-    discard existsOrCreateDir(scriptDir)
-    writeFile(scriptNimble, "")
+    var searchPaths = 
+      try:
+        getSearchPath($stdPath) & searchPaths.convertSearchPaths()
+      except IoError, OsError:
+        echo getCurrentExceptionMsg()
+        return
 
-    let scriptFile = open(scriptPath, fmReadWrite)
-
-    var searchPaths = getSearchPath($stdPath) & searchPaths.convertSearchPaths()
     searchPaths.add scriptDir
 
     let
-      intr = createInterpreter(scriptPath, searchPaths, flags = {allowInfiniteLoops},
-        defines = convertDefines defines
-      )
+      intr =
+        try:
+          createInterpreter(scriptPath, searchPaths, flags = {allowInfiniteLoops},
+            defines = convertDefines defines
+          )
+        except Exception:
+          echo getCurrentExceptionMsg()
+          return
 
-    intr.implementAddins(scriptFile, scriptName, modules, addins)
+    intr.implementAddins(scriptName, [], addins)
 
-    scriptFile.write readFile(script)
-    searchPaths.add script.parentDir
-
-    if addins.postCodeAdditions != nil:
-      scriptFile.write $addins.postCodeAdditions
+    searchPaths.add scriptDir
 
     intr.registerErrorHook proc(config: ConfigRef, info: TLineInfo, msg: string, sev: Severity) {.nimcall, gcSafe.} = 
       if sev == Error and config.error_counter >= config.error_max:
@@ -189,67 +181,14 @@ when isLib:
         raise (ref VMQuit)(msg: msg)
 
     try:
-      scriptFile.setFilePos(0)
+      let scriptFile = open(scriptPath)
       intr.evalScript(llStreamOpen(scriptFile))
-      result = intr
-    except VMQuit:
-      discard
+      result = WrappedInterpreter(intr)
+    except IoError, OsError, ESuggestDone, ValueError, Exception, VmQuit:
+      echo getCurrentExceptionMsg()
+      return
 
-  proc load_string(
-    str: cstring;
-    addins: VMAddins;
-    modules: openArray[cstring];
-    searchPaths: openArray[cstring];
-    stdPath: cstring; 
-    defines: openArray[Defines]
-  ): WrappedInterpreter {.nimscrintrp.} =
-    var searchPaths = getSearchPath($stdPath) & @searchPaths.convertSearchPaths()
-    let
-      script = "script"
-      scriptName = script.splitFile.name
-      scriptDir = getTempDir() / scriptName
-      scriptNimble = scriptDir / scriptName.changeFileExt(".nimble")
-      scriptPath = scriptDir / scriptName.changeFileExt(".nim")
-
-    discard existsOrCreateDir(scriptDir)
-    writeFile(scriptNimble, "")
-
-    let scriptFile = open(scriptPath, fmReadWrite)
-
-    searchPaths.add scriptDir
-
-
-    let
-      intr = createInterpreter(scriptPath, searchPaths, flags = {allowInfiniteLoops},
-        defines = convertDefines defines
-      )
-
-    intr.implementAddins(scriptFile, scriptName, modules, addins)
-
-    scriptFile.write str
-    searchPaths.add script.parentDir
-
-    scriptFile.write $addins.postCodeAdditions
-
-    intr.registerErrorHook proc(config: ConfigRef, info: TLineInfo, msg: string, sev: Severity) {.nimcall, gcSafe.} = 
-      if sev == Error and config.error_counter >= config.error_max:
-        var fileName: string
-        for k, v in config.m.filenameToIndexTbl.pairs:
-          if v == info.fileIndex:
-            fileName = k
-
-        {.cast(gcSafe).}:
-          if errorHook != nil:
-            errorHook(cstring fileName, int info.line, int info.col, msg, sev)
-
-        raise (ref VMQuit)(msg: msg)
-
-    try:
-      scriptFile.setFilePos(0)
-      intr.evalScript(llStreamOpen(scriptFile))
-      result = intr
-    except VMQuit:
-      discard
+  proc reload_script*(intr: WrappedInterpreter) {.nimscrintrp.} = Interpreter(intr).evalScript()
 
   proc new_node*(kind: TNodeKind): WrappedPNode {.nimscrintrp.} = ast.newNode(kind)
 
@@ -307,7 +246,9 @@ when isLib:
       dest = cstring PNode(val).strVal
 
   proc invoke*(intr: WrappedInterpreter, name: cstring, args: openArray[WrappedPNode]): WrappedPNode {.nimscrintrp.} =
-    let prcSym = intr.selectRoutine($name)
+    let
+      intr {.cursor.} = Interpreter intr
+      prcSym = intr.selectRoutine($name)
     if prcSym != nil:
       if args.len == 0:
         result = callRoutine(intr, prcSym, [])
@@ -328,6 +269,26 @@ when isLib:
   proc vmargs_set_result_string*(args: VmArgs, val: cstring) {.nimscrintrp.} = args.setResult($val)
   proc vmargs_set_result_node*(args: VmArgs, val: sink WrappedPNode) {.nimscrintrp.} = args.setResult(val)
 
+  proc destroy_save_state*(pnode: sink WrappedPNode) {.nimscrintrp.} = discard
+
+  proc save_state*(intr: WrappedInterpreter): SaveState {.nimscrintrp.} =
+    new result
+    for sym in intr.Interpreter.exportedSymbols():
+      if sym.kind == skVar:
+        result[].add SaveEntry(val: intr.Interpreter.getGlobalValue(sym), typ: sym.typ, name: sym.name.s)
+
+  proc load_state*(intr: Interpreter, state: SaveState) {.nimscrintrp.} =
+    for x in state[]:
+      let sym = intr.selectUniqueSymbol(x.name, {skVar})
+      if sym != nil and sym.typ.sameType(x.typ):
+        intr.setGlobalValue(sym, x.val)
+
+  proc deinit*() {.nimscrintrp.} = GCfullCollect() # Collect all?
+
+
+  proc destroy_interpreter*(intr: sink WrappedInterpreter) {.nimscrintrp.} = discard
+  proc destroy_pnode*(pnode: sink WrappedPNode) {.nimscrintrp.} = discard
+
   static: # Generate the kind enum
     var str = "enum nimscripter_pnode_kind {"
     for kind in TNodeKind:
@@ -336,45 +297,16 @@ when isLib:
         str.add ","
     str.add "};"
     writeFile("tests/lib/nimscr_kinds.h", str)
-
-  proc deinit*() {.nimscrintrp.} = GCfullCollect() # Collect all?
-
-
-  proc destroy_interpreter*(intr: sink WrappedInterpreter) {.nimscrintrp.} = discard
-  proc destroy_pnode*(pnode: sink WrappedPNode) {.nimscrintrp.} = discard
-  proc destroy_save_state*(pnode: sink WrappedPNode) {.nimscrintrp.} = discard
-
-  proc save_state*(intr: Interpreter): SaveState {.nimscrintrp.} =
-    new result
-    for sym in intr.exportedSymbols():
-      if sym.kind == skVar:
-        result[].add SaveEntry(val: intr.getGlobalValue(sym), typ: sym.typ, name: sym.name.s)
-
-  proc load_state*(intr: Interpreter, state: SaveState) {.nimscrintrp.} =
-    for x in state[]:
-      let sym = intr.selectUniqueSymbol(x.name, {skVar})
-      if sym != nil and sym.typ.sameType(x.typ):
-        intr.setGlobalValue(sym, x.val)
-
-
 else:
   proc loadScript*(
     script: cstring;
     addins: VMAddins;
-    modules: openArray[cstring];
     searchPaths: openArray[cstring];
     stdPath: cstring; 
-    defines: openArray[Defines]
+    defines: openArray[Defines] = defaultDefines
   ): WrappedInterpreter {.nimscrintrp, importc: nstr"load_script".}
 
-  proc loadString*(
-    script: cstring;
-    addins: VMAddins;
-    modules: openArray[cstring];
-    searchPaths: openArray[cstring];
-    stdPath: cstring; 
-    defines: openArray[Defines]
-  ): WrappedInterpreter {.nimscrintrp, importc: nstr"load_string".}
+  proc reload*(intr: WrappedInterpreter){.nimscrintrp, importc: nstr"reload_script".}
 
   proc newNode*(kind: TNodeKind): WrappedPNode {.nimscrintrp, importc: nstr"new_node".}
 
@@ -426,8 +358,8 @@ else:
   proc setResult*(args: VmArgs, val: string) {.nimscrintrp.} = args.setResult(cstring val)
   proc setResult*(args: VmArgs, val: sink WrappedPNode) {.nimscrintrp, importc: "vmargs_set_result_node".}
 
-  proc saveState*(intr: Interpreter): SaveState {.nimscrintrp, importc: nstr"save_state".}
-  proc loadState*(intr: Interpreter, saveState: SaveState) {.nimscrintrp, importc: nstr"load_state".}
+  proc saveState*(intr: WrappedInterpreter): SaveState {.nimscrintrp, importc: nstr"save_state".}
+  proc loadState*(intr: WrappedInterpreter, saveState: SaveState) {.nimscrintrp, importc: nstr"load_state".}
 
   proc deinit*() {.nimscrintrp, importc: nstr"deinit".}
 

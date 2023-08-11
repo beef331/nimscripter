@@ -14,4 +14,5 @@ requires "https://github.com/disruptek/assume >= 0.7.1"
 
 task buildLib, "Builds the library":
   selfExec("c --app:lib -d:release -d:nimscripterlib ./src/nimscripter/nimscr.nim")
-
+task buildLibd, "Builds the library":
+  selfExec("c --app:lib -d:nimscripterlib ./src/nimscripter/nimscr.nim")
