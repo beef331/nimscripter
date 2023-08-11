@@ -263,6 +263,20 @@ when isLib:
         let arr = cast[ptr UncheckedArray[PNode]](args[0].addr)
         result = callRoutine(intr, prcSym, arr.toOpenArray(0, args.high))
 
+  proc invoke_node_name*(intr: WrappedInterpreter, name: WrappedPNode, args: openArray[WrappedPNode]): WrappedPNode {.nimscrintrp.} =
+    let 
+      intr {.cursor.} = Interpreter intr
+      name {.cursor.} = PNode name
+    if name.kind != nkSym:
+      echo "Cannot invoke: ", name.kind
+    elif name != nil and name.sym != nil:
+      if args.len == 0:
+        result = callRoutine(intr, name.sym, [])
+      else:
+        let arr = cast[ptr UncheckedArray[PNode]](args[0].addr)
+        result = callRoutine(intr, name.sym, arr.toOpenArray(0, args.high))
+
+
   proc pnode_get_kind*(node: WrappedPNode): TNodeKind {.nimscrintrp.} = PNode(node).kind
 
   template getReg(a, i): untyped =
@@ -356,6 +370,7 @@ else:
   proc getString*(val: WrappedPNode, dest: var cstring): bool {.nimscrintrp, importc: nstr"pnode_get_string".}
 
   proc invoke*(intr: WrappedInterpreter, name: cstring, args: openArray[WrappedPNode]): WrappedPNode {.nimscrintrp, importc: nstr"invoke".}
+  proc invoke*(intr: WrappedInterpreter, name: WrappedPNode, args: openArray[WrappedPNode]): WrappedPNode {.nimscrintrp, importc: nstr"invoke_node_name".}
 
   proc kind*(node: WrappedPNode): TNodeKind {.nimscrintrp, importc: nstr"pnode_get_kind".}
 
