@@ -7,7 +7,8 @@ echo nimscr.version
 errorHook = proc(name: cstring, line, col: int, msg: cstring, sev: Severity) {.cdecl.} =
   echo fmt"{line}:{col}; {msg}"
 
-proc doThing(args: VmArgs) {.cdecl.} = 
+proc doThing(args: VmArgs) {.cdecl.} =
+  assert args.getKind(0) == rkInt
   echo args.getInt(0)
 
 let prc = VmProcSignature(package: "script", module: "script", name: "doSpecificThing", vmProc: doThing)

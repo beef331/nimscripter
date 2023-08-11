@@ -5,7 +5,7 @@ const isLib = defined(nimscripterlib)
 
 import "$nim" / compiler / [nimeval, renderer, ast, lineinfos, vmdef]
 import std/[os, sugar, strutils]
-export Severity, TNodeKind, VmArgs
+export Severity, TNodeKind, VmArgs, TRegisterKind
 
 when isLib:
   import std / [strformat, tables, strscans]
@@ -265,6 +265,11 @@ when isLib:
 
   proc pnode_get_kind*(node: WrappedPNode): TNodeKind {.nimscrintrp.} = PNode(node).kind
 
+  template getReg(a, i): untyped =
+    doAssert i < a.rc-1
+    a.slots[i+a.rb+1].unsafeAddr
+
+  proc vmargs_get_kind*(args: VmArgs, i: Natural): TRegisterKind {.nimscrintrp.} = args.getReg(i).kind 
   proc vmargs_get_int*(args: VmArgs, i: Natural): BiggestInt {.nimscrintrp.} = args.getInt(i)
   proc vmargs_get_bool*(args: VmArgs, i: Natural): bool {.nimscrintrp.} = args.getInt(i) != 0
   proc vmargs_get_float*(args: VmArgs, i: Natural): BiggestFloat {.nimscrintrp.} = args.getFloat(i)
@@ -354,6 +359,7 @@ else:
 
   proc kind*(node: WrappedPNode): TNodeKind {.nimscrintrp, importc: nstr"pnode_get_kind".}
 
+  proc getKind*(args: VmArgs, i: Natural): TRegisterKind {.nimscrintrp, importc: nstr"vmargs_get_kind".} 
   proc getInt*(args: VmArgs, i: Natural): BiggestInt {.nimscrintrp, importc: nstr"vmargs_get_int".}
   proc getBool*(args: VmArgs, i: Natural): bool {.nimscrintrp, importc: nstr"vmargs_get_bool".}
   proc getFloat*(args: VmArgs, i: Natural): BiggestFloat {.nimscrintrp, importc: nstr"vmargs_get_float".}
