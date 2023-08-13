@@ -1,6 +1,10 @@
 import ../../src/nimscripter/nimscr
 import std/strformat
 
+type Thing = object
+  x, y: int
+  s: set[char]
+
 nimscr.init()
 echo nimscr.version
 
@@ -11,11 +15,22 @@ proc doThing(args: VmArgs) {.cdecl.} =
   assert args.getKind(0) == rkInt
   echo args.getInt(0)
 
-let prc = VmProcSignature(package: "script", module: "script", name: "doSpecificThing", vmProc: doThing)
-var addins = VmAddins(procs: cast[ptr UncheckedArray[typeof(prc)]](addr prc), procLen: 1)
+let prc = 
+  [
+    VmProcSignature(package: "script", module: "script", name: "doSpecificThing", vmProc: doThing),
+  ]
+
+
+var addins = VmAddins(procs: cast[ptr UncheckedArray[typeof(prc[0])]](addr prc), procLen: prc.len)
 const myScript = """
+type Thing = object
+  x, y: int
+  s: set[char]
+
 import std/json
+
 proc doSpecificThing(i: int) = discard
+proc getThing*(): Thing = Thing(x: 100, y: 200)
 
 echo %*{"a": "Hello World"}
 
@@ -68,3 +83,4 @@ assert (int, string).fromVm(ret) == (100, "hello")
 ret = intr.invoke("tupleTest", [newNode(3100), newNode("world")])
 assert (int, string).fromVm(ret) == (3100, "world")
 discard intr.invoke("inputTest", [newNode ("hello", 32f, 100, true)])
+assert Thing.fromVm(intr.invoke("getThing", [])) == Thing(x: 100, y: 200)
