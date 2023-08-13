@@ -68,7 +68,7 @@ proc fromVm*(t: typedesc[string], node: PNode): string =
 
 proc fromVm*[T](t: typedesc[set[T]], node: Pnode): t =
   if node.kind == nkCurly:
-    for val in node:
+    for val in node.items:
       if val != nil:
         case val.kind
         of nkRange:
@@ -93,14 +93,14 @@ proc fromVm*[T: distinct](obj: typedesc[T], vmNode: PNode): T = T(fromVm(distinc
 proc fromVm*[T](obj: typedesc[seq[T]], vmNode: Pnode): seq[T] =
   if vmNode.kind in {nkBracket, nkBracketExpr}:
     result.setLen(vmNode.sons.len)
-    for i, x in vmNode.sons:
+    for i, x in vmNode.pairs:
       result[i] = fromVm(T, x)
   else:
     raiseParseError(seq[T])
 
 proc fromVm*[Idx, T](obj: typedesc[array[Idx, T]], vmNode: Pnode): obj =
   if vmNode.kind in {nkBracket, nkBracketExpr}:
-    for i, x in vmNode:
+    for i, x in vmNode.pairs:
       result[Idx(i - obj.low.ord)] = fromVm(T, x)
   else:
     raiseParseError(array[Idx, T])
