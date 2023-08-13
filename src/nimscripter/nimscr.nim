@@ -4,7 +4,7 @@
 const isLib = defined(nimscripterlib)
 
 import "$nim" / compiler / [nimeval, renderer, ast, lineinfos, vmdef]
-import std/[os, sugar, strutils]
+import std/[os, sugar, strutils, tempfiles]
 export Severity, TNodeKind, VmArgs, TRegisterKind
 
 when isLib:
@@ -48,12 +48,15 @@ type
   VmQuit = object of CatchableError
   WrappedPNode* = distinct PNode
 
-  WrappedInterpreter* = distinct Interpreter
   Version* = object
     major*, minor*, patch*: uint8
 
+  WrappedInterpreter* = object
+    intr: Interpreter
+    path, tempBuffer: string
+
 when isLib:
-  type 
+  type
     SaveEntry = object
       val: PNode
       typ: PType
@@ -84,8 +87,9 @@ proc `=destroy`*(pnode: WrappedPNode) =
 
 proc `=destroy`*(intr: WrappedInterpreter) =
   when isLib:
-    if Interpreter(intr) != nil:
-      `=destroy`(Interpreter(intr))
+    if intr.intr != nil:
+      `=destroy`(intr.intr)
+    `=destroy`(intr.path)
   else:
     destroy(intr)
 
@@ -93,9 +97,7 @@ when not isLib:
   proc `=destroy`*(intr: SaveState) =
     destroy(intr)
 
-proc isNil*(intr: WrappedInterpreter): bool = Interpreter(intr).isNil
-proc `==`*(intr: WrappedInterpreter, _: typeof(nil)): bool = intr.isNil
-proc `==`*(_: typeof(nil), intr: WrappedInterpreter): bool = intr.isNil
+proc isValid*(intr: WrappedInterpreter): bool = intr.intr != nil
 
 converter toPNode*(wrapped: WrappedPNode): PNode = PNode(wrapped)
 converter toPNode*(pnode: PNode): WrappedPNode = WrappedPNode(pnode)
@@ -190,12 +192,33 @@ when isLib:
     try:
       let scriptFile = open(scriptPath)
       intr.evalScript(llStreamOpen(scriptFile))
-      result = WrappedInterpreter(intr)
+      result = WrappedInterpreter(intr: intr, path: scriptPath, tempBuffer: genTempPath("", "", getTempDir()))
+      try:
+        discard existsOrCreateDir(result.tempBuffer.parentDir)
+        copyFile(scriptPath, result.tempBuffer)
+      except ValueError, OsError, IoError:
+        echo "Error creating temp buffer: ", getCurrentExceptionMsg()
+        return
+
+
+
     except IoError, OsError, ESuggestDone, ValueError, Exception, VmQuit:
       echo getCurrentExceptionMsg()
       return
 
-  proc reload_script*(intr: WrappedInterpreter) {.nimscrintrp.} = Interpreter(intr).evalScript()
+  proc reload_script*(intr: var WrappedInterpreter, keepBest: bool = false) {.nimscrintrp, raises: [].} =
+    try:
+      let scriptFile = open(intr.path)
+      intr.intr.evalScript(llStreamOpen(scriptFile))
+      if keepBest:
+        copyFile(intr.path, intr.tempBuffer)
+    except IoError, OsError, ESuggestDone, ValueError, Exception, VmQuit:
+      try:
+        if keepBest:
+          let scriptFile = open(intr.tempBuffer)
+          intr.intr.evalScript(llStreamOpen(scriptFile))
+      except IoError, OsError, ESuggestDone, ValueError, Exception, VmQuit:
+        echo getCurrentExceptionMsg()
 
   proc new_node*(kind: TNodeKind): WrappedPNode {.nimscrintrp.} = ast.newNode(kind)
 
@@ -254,7 +277,7 @@ when isLib:
 
   proc invoke*(intr: WrappedInterpreter, name: cstring, args: openArray[WrappedPNode]): WrappedPNode {.nimscrintrp.} =
     let
-      intr {.cursor.} = Interpreter intr
+      intr {.cursor.} = intr.intr
       prcSym = intr.selectRoutine($name)
     if prcSym != nil:
       if args.len == 0:
@@ -265,7 +288,7 @@ when isLib:
 
   proc invoke_node_name*(intr: WrappedInterpreter, name: WrappedPNode, args: openArray[WrappedPNode]): WrappedPNode {.nimscrintrp.} =
     let 
-      intr {.cursor.} = Interpreter intr
+      intr {.cursor.} = intr.intr
       name {.cursor.} = PNode name
     if name.kind != nkSym:
       echo "Cannot invoke: ", name.kind
@@ -299,15 +322,15 @@ when isLib:
 
   proc save_state*(intr: WrappedInterpreter): SaveState {.nimscrintrp.} =
     new result
-    for sym in intr.Interpreter.exportedSymbols():
+    for sym in intr.intr.exportedSymbols():
       if sym.kind == skVar:
-        result[].add SaveEntry(val: intr.Interpreter.getGlobalValue(sym), typ: sym.typ, name: sym.name.s)
+        result[].add SaveEntry(val: intr.intr.getGlobalValue(sym), typ: sym.typ, name: sym.name.s)
 
-  proc load_state*(intr: Interpreter, state: SaveState) {.nimscrintrp.} =
+  proc load_state*(intr: WrappedInterpreter, state: SaveState) {.nimscrintrp.} =
     for x in state[]:
-      let sym = intr.selectUniqueSymbol(x.name, {skVar})
-      if sym != nil and sym.typ.sameType(x.typ):
-        intr.setGlobalValue(sym, x.val)
+      let sym = intr.intr.selectUniqueSymbol(x.name, {skVar})
+      if sym != nil and $sym.typ == $x.typ:
+        intr.intr.setGlobalValue(sym, x.val)
 
   proc deinit*() {.nimscrintrp.} = GCfullCollect() # Collect all?
 
@@ -334,7 +357,7 @@ else:
     defines: openArray[Defines] = defaultDefines
   ): WrappedInterpreter {.nimscrintrp, importc: nstr"load_script".}
 
-  proc reload*(intr: WrappedInterpreter){.nimscrintrp, importc: nstr"reload_script".}
+  proc reload*(intr: var WrappedInterpreter, keepBest: bool = false){.nimscrintrp, importc: nstr"reload_script".}
 
   proc newNode*(kind: TNodeKind): WrappedPNode {.nimscrintrp, importc: nstr"new_node".}
 
@@ -384,9 +407,9 @@ else:
   proc setResult*(args: VmArgs, val: BiggestInt) {.nimscrintrp, importc: nstr"vmargs_set_result_int".}
   proc setResult*(args: VmArgs, val: SomeOrdinal or enum or bool) = args.setResult(BiggestInt(val))
   proc setResult*(args: VmArgs, val: BiggestFloat) {.nimscrintrp, importc: nstr"vmargs_set_result_float".}
-  proc setResult*(args: VmArgs, val: cstring) {.nimscrintrp, importc: "vmargs_set_result_string".}
-  proc setResult*(args: VmArgs, val: string) {.nimscrintrp.} = args.setResult(cstring val)
-  proc setResult*(args: VmArgs, val: sink WrappedPNode) {.nimscrintrp, importc: "vmargs_set_result_node".}
+  proc setResult*(args: VmArgs, val: cstring) {.nimscrintrp, importc: nstr"vmargs_set_result_string".}
+  proc setResult*(args: VmArgs, val: string) = args.setResult(cstring val)
+  proc setResult*(args: VmArgs, val: sink WrappedPNode) {.nimscrintrp, importc: nstr"vmargs_set_result_node".}
 
   proc saveState*(intr: WrappedInterpreter): SaveState {.nimscrintrp, importc: nstr"save_state".}
   proc loadState*(intr: WrappedInterpreter, saveState: SaveState) {.nimscrintrp, importc: nstr"load_state".}
