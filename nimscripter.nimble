@@ -15,4 +15,4 @@ requires "https://github.com/disruptek/assume >= 0.7.1"
 task buildLib, "Builds the library":
   selfExec("c --app:lib -d:release -d:nimscripterlib --deepCopy:on --nimMainPrefix:\"nimscripter_\" ./src/nimscripter/nimscr.nim")
 task buildLibd, "Builds the library":
-  selfExec("c --app:lib -d:nimscripterlib --deepCopy:on --nimMainPrefix:\"nimscripter_\" ./src/nimscripter/nimscr.nim")
+  selfExec("c --app:lib -d:nimscripterlib --header --deepCopy:on --nimMainPrefix:\"nimscripter_\" ./src/nimscripter/nimscr.nim")
