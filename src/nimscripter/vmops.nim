@@ -24,7 +24,9 @@ proc rmFile(file: string) = removeFile(file)
 proc mvDir(source, dest: string, checkDir = false) = moveDir(source, dest)
 proc mvFile(source, dest: string) = moveFile(source, dest)
 proc cd(dir: string) = setCurrentDir(dir)
-
+proc mkDir(dir: string) = createDir dir
+proc cpFile(f, to: string) = copyFile f, to
+proc cpDir(f, to: string) = copyDir f, to
 
 template addVmops*(module: untyped) =
   ## Adds the ops to the provided `module`
@@ -43,5 +45,8 @@ template addVmops*(module: untyped) =
     listDirs,
     rmDir,
     rmFile,
-    vmops.gorgeEx
+    vmops.gorgeEx,
+    mkDir,
+    cpFile,
+    cpDir
   )
