@@ -105,7 +105,7 @@ proc getLambda*(pDef: NimNode, realProcName: Nimnode = nil): NimNode =
     result[^1].add newCall(procName)
   let body = result[^1]
   result[^1] = quote do:
-    {.cast(gcsafe)}:
+    {.cast(gcsafe).}:
       `body`
 
   if pdef.params[0].kind != nnkEmpty:
@@ -349,6 +349,10 @@ macro exportCode*(module: untyped, code: typed): untyped =
   ## Used for exporting code to nimscript, not declaring it in Nim
   addToAddonCache(code, $module)
 
+macro addVariable*(module, name: untyped, typ: typedesc) =
+  ## Used for appending a variable to the 'module' enivronment.
+  let decl = newVarStmt(postfix(name, "*"), newCall("default", typ))
+  addToAddonCache(decl, $module)
 
 macro implNimscriptModule*(moduleName: untyped): untyped =
   ## This emits a `VMAddins`, which can be used to pass to the `loadScript` proc.
