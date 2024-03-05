@@ -9,12 +9,14 @@ suite("General A(fromFile)"):
   proc doStuffA(a: SomeRef) = check a.a == 100
   proc doStuffB(a: seq[int]) = check a == @[10, 20, 30, 10, 50, 100]
   proc doThingWithDist(a: DistType) = check int(a) == 100
+  proc testSink(i: sink int): int = i
 
   exportTo(test,
     doStuff,
     doStuffA,
     doStuffB,
     doThingWithDist,
+    testSink,
     DistType,
     ComplexObject,
     SomeRef,
@@ -61,6 +63,10 @@ suite("General A(fromFile)"):
     let aVal = fromVm(AnObject, AnObject(a: 100, b: 20).toVm)
     check aVal.a == 100
     check aVal.b == 20
+
+    type QueryParams = distinct seq[(string, string)] # Silly error due to mixins
+
+    check compiles((discard fromVm(QueryParams, nil)))
 
 
   test("parseErrors"):

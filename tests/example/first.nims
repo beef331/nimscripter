@@ -75,3 +75,6 @@ makeNumTest(int64)
 
 makeNumTest(float)
 makeNumTest(float32)
+
+
+assert testSink(100) == 100

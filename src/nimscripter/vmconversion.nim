@@ -85,18 +85,20 @@ proc fromVm*[T: object](obj: typedesc[T], vmNode: PNode): T
 proc fromVm*[T: tuple](obj: typedesc[T], vmNode: Pnode): T
 proc fromVm*[T: ref object](obj: typedesc[T], vmNode: PNode): T
 proc fromVm*[T: ref(not object)](obj: typedesc[T], vmNode: PNode): T
+proc fromVm*(obj: typedesc[(distinct)], vmNode: PNode): obj # Mixin's don't work apparently
 
 proc fromVm*[T: proc](obj: typedesc[T], vmNode: PNode): T = nil
 
-proc fromVm*[T: distinct](obj: typedesc[T], vmNode: PNode): T = T(fromVm(distinctBase(T, true), vmNode))
 
-proc fromVm*[T](obj: typedesc[seq[T]], vmNode: Pnode): seq[T] =
+proc fromVm*[T](obj: typedesc[seq[T]], vmNode: Pnode): obj =
+  mixin fromVm
   if vmNode.kind in {nkBracket, nkBracketExpr}:
     result.setLen(vmNode.sons.len)
     for i, x in vmNode.pairs:
       result[i] = fromVm(T, x)
   else:
-    raiseParseError(seq[T])
+    raiseParseError(obj)
+
 
 proc fromVm*[Idx, T](obj: typedesc[array[Idx, T]], vmNode: Pnode): obj =
   if vmNode.kind in {nkBracket, nkBracketExpr}:
@@ -113,6 +115,10 @@ proc fromVm*[T: tuple](obj: typedesc[T], vmNode: Pnode): T =
       inc index
   else:
     raiseParseError(T)
+
+proc fromVm*(obj: typedesc[(distinct)], vmNode: PNode): obj =
+  mixin fromVm
+  obj(fromVm(distinctBase(obj), vmNode))
 
 proc hasRecCase(n: NimNode): bool =
   for son in n:

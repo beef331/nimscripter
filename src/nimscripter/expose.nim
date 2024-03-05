@@ -65,7 +65,9 @@ proc getLambda*(pDef: NimNode, realProcName: Nimnode = nil): NimNode =
      typ = typ[1]
     of ntyBuiltinTypeClass, ntyCompositeTypeClass:
       error("Cannot use type classes with nimscripter, make an alias.", pdef)
-    elif typ.kind == nnkEmpty: 
+    elif typ.kind == nnkCommand and typ[0].eqIdent"sink":
+      typ = typ[1]
+    elif typ.kind == nnkEmpty:
      typ = newCall("typeof", def[^1])
     else: discard
     for idnt in def[0..^3]: # Get data from buffer in the vm proc
