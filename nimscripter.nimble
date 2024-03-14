@@ -10,9 +10,6 @@ srcDir        = "src"
 # Dependencies
 requires "nim >= 1.6.0" # need some bug fixes
 requires "https://github.com/disruptek/assume >= 0.7.1"
+requires "https://github.com/beef331/seeya >= 0.1.7"
 
-
-task buildLib, "Builds the library":
-  selfExec("c --app:lib -d:release -d:nimscripterlib --deepCopy:on --nimMainPrefix:\"nimscripter_\" ./src/nimscripter/nimscr.nim")
-task buildLibd, "Builds the library":
-  selfExec("c --app:lib -d:nimscripterlib --header --deepCopy:on --nimMainPrefix:\"nimscripter_\" ./src/nimscripter/nimscr.nim")
+include "config.nims"

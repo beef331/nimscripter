@@ -2,11 +2,12 @@
 !*.*
 !*/
 *.dll
-*.lib
-*.a
-*.so
 *.exe
 *.kate-swap
 nimcache/
 nimblecache/
 htmldocs/
+.deps/
+*.out
+*.so
+atlas.workspace
