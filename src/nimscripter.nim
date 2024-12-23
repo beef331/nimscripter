@@ -202,8 +202,7 @@ macro invokeDynamic*(intr: Interpreter; pName: string; args: varargs[typed];
   result = quote do:
     block:
       let `cachedIntrName` = `intr`
-      when `cachedIntrName` is Option[Interpreter]:
-        assert `cachedIntrName`.isSome
+
       when `returnType` isnot void:
         var `resultIdnt`: `returnType`
       let `nsProc` = `cachedIntrName`.selectRoutine(`pName`)
@@ -213,7 +212,7 @@ macro invokeDynamic*(intr: Interpreter; pName: string; args: varargs[typed];
           let `retName` = `nsCall`
           `retNode`
         else:
-          `nsCall`
+          discard `nsCall`
       else:
         raise newException(VmProcNotFound, "'$#' was not found in the script." % `pName`)
 

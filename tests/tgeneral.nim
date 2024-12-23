@@ -71,13 +71,13 @@ suite("General A(fromFile)"):
 
   test("parseErrors"):
     expect(VMParseError):
-      intr.invoke(getfloat, 3.14, returnType = SomeEnum)
+      discard intr.invoke(getfloat, 3.14, returnType = SomeEnum)
 
     expect(VMParseError):
-      intr.invoke(getUint64, 10u64, returnType = float)
+      discard intr.invoke(getUint64, 10u64, returnType = float)
 
     expect(VMParseError):
-      intr.invoke(getChar, 'a', returnType = string)
+      discard intr.invoke(getChar, 'a', returnType = string)
 
     expect(VMParseError):
       discard intr.getGlobalVariable[:seq[int]]("a")
