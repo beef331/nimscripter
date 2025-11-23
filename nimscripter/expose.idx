@@ -1,0 +1,11 @@
+nimTitle	expose	nimscripter/expose.html	module src/nimscripter/expose		0
+nim	getMangledName	nimscripter/expose.html#getMangledName,NimNode	proc getMangledName(pDef: NimNode): string		23
+nim	getVmRuntimeImpl	nimscripter/expose.html#getVmRuntimeImpl,NimNode	proc getVmRuntimeImpl(pDef: NimNode): string		33
+nim	getLambda	nimscripter/expose.html#getLambda,NimNode,NimNode	proc getLambda(pDef: NimNode; realProcName: NimNode = nil): NimNode		46
+nim	addToCache	nimscripter/expose.html#addToCache.m,typed,staticstring	macro addToCache(sym: typed; moduleName: static string)		162
+nim	exportTo	nimscripter/expose.html#exportTo.m,untyped,varargs[untyped]	macro exportTo(moduleName: untyped; procDefs: varargs[untyped]): untyped		179
+nim	addCallable	nimscripter/expose.html#addCallable.m,untyped,typed	macro addCallable(moduleName: untyped; body: typed)		186
+nim	exportCodeAndKeep	nimscripter/expose.html#exportCodeAndKeep.m,untyped,typed	macro exportCodeAndKeep(module: untyped; code: typed): untyped		345
+nim	exportCode	nimscripter/expose.html#exportCode.m,untyped,typed	macro exportCode(module: untyped; code: typed): untyped		350
+nim	addVariable	nimscripter/expose.html#addVariable.m,untyped,untyped,typedesc	macro addVariable(module, name: untyped; typ: typedesc)		354
+nim	implNimscriptModule	nimscripter/expose.html#implNimscriptModule.m,untyped	macro implNimscriptModule(moduleName: untyped): untyped		359

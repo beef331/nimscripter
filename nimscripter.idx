@@ -1,0 +1,18 @@
+nimTitle	nimscripter	nimscripter.html	module src/nimscripter		0
+nim	VMQuit	nimscripter.html#VMQuit	object VMQuit		11
+nim	VMErrorHook	nimscripter.html#VMErrorHook	type VMErrorHook		13
+nim	VmProcNotFound	nimscripter.html#VmProcNotFound	object VmProcNotFound		15
+nim	VmSymNotFound	nimscripter.html#VmSymNotFound	object VmSymNotFound		16
+nim	NimScriptFile	nimscripter.html#NimScriptFile	type NimScriptFile		17
+nim	NimScriptPath	nimscripter.html#NimScriptPath	type NimScriptPath		18
+nim	SaveState	nimscripter.html#SaveState	type SaveState		23
+nim	saveState	nimscripter.html#saveState,Interpreter	proc saveState(intr: Interpreter): SaveState		40
+nim	loadState	nimscripter.html#loadState,Interpreter,SaveState	proc loadState(intr: Interpreter; state: SaveState)		49
+nim	loadScript	nimscripter.html#loadScript,,VMAddins,varargs[string],sinkseq[string]	proc loadScript(script: NimScriptFile or NimScriptPath;\n           addins: VMAddins = VMAddins(); modules: varargs[string];\n           vmErrorHook = errorHook; stdPath = findNimStdlibCompileTime();\n           searchPaths: sink seq[string] = @[]; defines = defaultDefines): Option[\n    Interpreter]		55
+nim	loadScriptWithState	nimscripter.html#loadScriptWithState,Option[Interpreter],,VMAddins,varargs[string],sinkseq[string]	proc loadScriptWithState(intr: var Option[Interpreter];\n                    script: NimScriptFile or NimScriptPath;\n                    addins: VMAddins = VMAddins(); modules: varargs[string];\n                    vmErrorHook = errorHook;\n                    stdPath = findNimStdlibCompileTime();\n                    searchPaths: sink seq[string] = @[];\n                    defines = defaultDefines)		118
+nim	safeloadScriptWithState	nimscripter.html#safeloadScriptWithState,Option[Interpreter],,VMAddins,varargs[string],sinkseq[string]	proc safeloadScriptWithState(intr: var Option[Interpreter];\n                        script: NimScriptFile or NimScriptPath;\n                        addins: VMAddins = VMAddins(); modules: varargs[string];\n                        vmErrorHook = errorHook;\n                        stdPath = findNimStdlibCompileTime();\n                        searchPaths: sink seq[string] = @[];\n                        defines = defaultDefines)		138
+nim	getGlobalVariable	nimscripter.html#getGlobalVariable,,string	proc getGlobalVariable[T](intr: Option[Interpreter] or Interpreter; name: string): T		159
+nim	invokeDynamic	nimscripter.html#invokeDynamic.m,Interpreter,string,varargs[typed],typedesc	macro invokeDynamic(intr: Interpreter; pName: string; args: varargs[typed];\n              returnType: typedesc = void): untyped		170
+nim	invoke	nimscripter.html#invoke.m,Option[Interpreter],untyped,varargs[typed],typedesc	macro invoke(intr: Option[Interpreter]; pName: untyped; args: varargs[typed];\n       returnType: typedesc = void): untyped		219
+nim	invoke	nimscripter.html#invoke.m,Interpreter,untyped,varargs[typed],typedesc	macro invoke(intr: Interpreter; pName: untyped; args: varargs[typed];\n       returnType: typedesc = void): untyped		227
+nimgrp	invoke	nimscripter.html#invoke-macros-all	macro		219

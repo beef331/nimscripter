@@ -1,0 +1,39 @@
+nimTitle	vmconversion	nimscripter/vmconversion.html	module src/nimscripter/vmconversion		0
+nim	VMParseError	nimscripter/vmconversion.html#VMParseError	object VMParseError		6
+nim	toVm	nimscripter/vmconversion.html#toVm,T	proc toVm[T: enum or bool](a: T): PNode		8
+nim	toVm	nimscripter/vmconversion.html#toVm,T_2	proc toVm[T: char](a: T): PNode		9
+nim	toVm	nimscripter/vmconversion.html#toVm,int8	proc toVm(a: int8): PNode		11
+nim	toVm	nimscripter/vmconversion.html#toVm,int16	proc toVm(a: int16): PNode		12
+nim	toVm	nimscripter/vmconversion.html#toVm,int32	proc toVm(a: int32): PNode		13
+nim	toVm	nimscripter/vmconversion.html#toVm,int64	proc toVm(a: int64): PNode		14
+nim	toVm	nimscripter/vmconversion.html#toVm,int	proc toVm(a: int): PNode		15
+nim	toVm	nimscripter/vmconversion.html#toVm,uint8	proc toVm(a: uint8): PNode		17
+nim	toVm	nimscripter/vmconversion.html#toVm,uint16	proc toVm(a: uint16): PNode		18
+nim	toVm	nimscripter/vmconversion.html#toVm,uint32	proc toVm(a: uint32): PNode		19
+nim	toVm	nimscripter/vmconversion.html#toVm,uint64	proc toVm(a: uint64): PNode		20
+nim	toVm	nimscripter/vmconversion.html#toVm,uint	proc toVm(a: uint): PNode		21
+nim	toVm	nimscripter/vmconversion.html#toVm,float32	proc toVm(a: float32): PNode		23
+nim	toVm	nimscripter/vmconversion.html#toVm,float64	proc toVm(a: float64): PNode		24
+nim	toVm	nimscripter/vmconversion.html#toVm,string	proc toVm(a: string): PNode		25
+nim	toVm	nimscripter/vmconversion.html#toVm,T_3	proc toVm[T: proc](a: T): PNode		26
+nim	toVm	nimscripter/vmconversion.html#toVm,set[T]	proc toVm[T](s: set[T]): PNode		28
+nim	toVm	nimscripter/vmconversion.html#toVm,T_4	proc toVm[T: openArray](obj: T): PNode		36
+nim	toVm	nimscripter/vmconversion.html#toVm,T_5	proc toVm[T: tuple](obj: T): PNode		37
+nim	toVm	nimscripter/vmconversion.html#toVm,T_6	proc toVm[T: object](obj: T): PNode		38
+nim	toVm	nimscripter/vmconversion.html#toVm,T_7	proc toVm[T: ref](obj: T): PNode		39
+nim	toVm	nimscripter/vmconversion.html#toVm,T_8	proc toVm[T: distinct](a: T): PNode		40
+nim	fromVm	nimscripter/vmconversion.html#fromVm,typedesc[],PNode	proc fromVm(t: typedesc[SomeOrdinal or char]; node: PNode): t:type		51
+nim	fromVm	nimscripter/vmconversion.html#fromVm,typedesc[SomeFloat],PNode	proc fromVm(t: typedesc[SomeFloat]; node: PNode): t:type		57
+nim	fromVm	nimscripter/vmconversion.html#fromVm,typedesc[string],PNode	proc fromVm(t: typedesc[string]; node: PNode): string		63
+nim	fromVm	nimscripter/vmconversion.html#fromVm,typedesc[set[T]],PNode	proc fromVm[T](t: typedesc[set[T]]; node: PNode): t:type		69
+nim	fromVm	nimscripter/vmconversion.html#fromVm,typedesc[proc]	proc fromVm(t: typedesc[proc]): typeof(t)		82
+nim	fromVm	nimscripter/vmconversion.html#fromVm,typedesc[T],PNode	proc fromVm[T: object](obj: typedesc[T]; vmNode: PNode): T		84
+nim	fromVm	nimscripter/vmconversion.html#fromVm,typedesc[T],PNode_2	proc fromVm[T: tuple](obj: typedesc[T]; vmNode: PNode): T		85
+nim	fromVm	nimscripter/vmconversion.html#fromVm,typedesc[T],PNode_3	proc fromVm[T: ref object](obj: typedesc[T]; vmNode: PNode): T		86
+nim	fromVm	nimscripter/vmconversion.html#fromVm,typedesc[T],PNode_4	proc fromVm[T: ref (not object)](obj: typedesc[T]; vmNode: PNode): T		87
+nim	fromVm	nimscripter/vmconversion.html#fromVm,typedesc[],PNode_2	proc fromVm(obj: typedesc[(distinct)]; vmNode: PNode): obj:type		88
+nim	fromVm	nimscripter/vmconversion.html#fromVm,typedesc[T],PNode_5	proc fromVm[T: proc](obj: typedesc[T]; vmNode: PNode): T		90
+nim	fromVm	nimscripter/vmconversion.html#fromVm,typedesc[seq[T]],PNode	proc fromVm[T](obj: typedesc[seq[T]]; vmNode: PNode): obj:type		93
+nim	fromVm	nimscripter/vmconversion.html#fromVm,typedesc[array[Idx,T]],PNode	proc fromVm[Idx, T](obj: typedesc[array[Idx, T]]; vmNode: PNode): obj:type		103
+nimgrp	tovm	nimscripter/vmconversion.html#toVm-procs-all	proc		8
+nimgrp	fromvm	nimscripter/vmconversion.html#fromVm-procs-all	proc		51

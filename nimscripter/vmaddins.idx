@@ -1,0 +1,3 @@
+nimTitle	vmaddins	nimscripter/vmaddins.html	module src/nimscripter/vmaddins		0
+nim	VmProcSignature	nimscripter/vmaddins.html#VmProcSignature	object VmProcSignature		4
+nim	VMAddins	nimscripter/vmaddins.html#VMAddins	object VMAddins		8
