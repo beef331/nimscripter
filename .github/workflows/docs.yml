@@ -5,7 +5,7 @@ on:
       - master
 env:
   nim-version: 'stable'
-  nim-src: ${{ github.event.repository.name }}.nim
+  nim-src: src/${{ github.event.repository.name }}.nim
   deploy-dir: .gh-pages
 jobs:
   docs:
